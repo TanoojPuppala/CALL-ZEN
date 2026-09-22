@@ -1,22 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Environment variables or fallback demo credentials
+// Environment variables
 const env = (import.meta as any)?.env || {};
-const supabaseUrl = env.VITE_SUPABASE_URL || '';
-const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL || 'https://irgvocxzomfxioysgtow.supabase.co';
+const supabaseAnonKey = env.VITE_SUPABASE_ANON_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_vgTb2Ikwdhyaxd7aDJkTCg_BrtxJbfj';
 
-export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
-  supabaseAnonKey &&
-  supabaseUrl !== 'https://demo-smartcall.supabase.co' &&
-  !supabaseUrl.includes('your-project-ref')
-);
+export const isSupabaseConfigured = true;
 
-// Fallback placeholder client if env not set
-export const supabase = createClient(
-  isSupabaseConfigured ? supabaseUrl : 'https://demo-smartcall.supabase.co',
-  isSupabaseConfigured ? supabaseAnonKey : 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy_anon_key'
-);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 export interface SignUpData {
   fullName: string;
