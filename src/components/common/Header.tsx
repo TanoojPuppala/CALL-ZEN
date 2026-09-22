@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
             >
               {title || 'SmartCall AI'}
             </h1>
-            {!hideOrgBadge && (
+            {!hideOrgBadge && currentPeriod && (
               <span
                 className="badge badge-primary"
                 style={{ fontSize: '10px', padding: '2px 8px' }}
@@ -92,11 +92,11 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
             )}
           </div>
-          {!hideOrgBadge && (
+          {!hideOrgBadge && (currentOrg || currentPeriod) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
               <Building2 size={11} color="var(--text-500)" />
               <span style={{ fontSize: '11px', color: 'var(--text-500)' }}>
-                {currentOrg.name} ({currentPeriod.year})
+                {currentOrg ? currentOrg.name : 'Organization Not Set'}{currentPeriod ? ` (${currentPeriod.year})` : ''}
               </span>
             </div>
           )}

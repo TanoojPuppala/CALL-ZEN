@@ -27,10 +27,11 @@ export const UploadDataScreen: React.FC = () => {
         }
       }
     } catch (err) {
-      console.warn('Direct fetch failed, generating instant sample:', err);
+      console.warn('Direct fetch failed:', err);
     }
 
-    generateSamplePreview(format === 'pdf' ? 'PDF Table' : 'Excel');
+    setIsProcessing(false);
+    showToast('Sample file unavailable. Please choose a local CSV/Excel file.');
   };
 
   const parseFileAndPreview = (file: File) => {
@@ -61,12 +62,12 @@ export const UploadDataScreen: React.FC = () => {
 
             parsedContacts.push({
               id: `imported-${Date.now()}-${i}`,
-              organizationId: currentOrg.id,
-              periodId: currentPeriod.id,
+              organizationId: currentOrg ? currentOrg.id : 'org-default',
+              periodId: currentPeriod ? currentPeriod.id : 'period-default',
               externalId: rollNo,
               name,
               phone: phone.startsWith('+') ? phone : `+91 ${phone}`,
-              department: currentPeriod.departmentOrClass,
+              department: currentPeriod ? currentPeriod.departmentOrClass : 'General',
               category: attendance < 75 ? 'Needs Follow-up' : 'Regular',
               overallAttendance: attendance,
               status: attendance < 75 ? 'absent' : 'present',
@@ -75,106 +76,26 @@ export const UploadDataScreen: React.FC = () => {
           }
 
           if (parsedContacts.length === 0) {
-            // If empty, generate fallback mock from spreadsheet headers
-            generateSamplePreview('Excel');
+            setIsProcessing(false);
+            showToast('No valid contact records found in uploaded file. Please check column headers.');
           } else {
             setUploadedPreviewData(parsedContacts);
             setTimeout(() => {
               setIsProcessing(false);
-              showToast(`Extracted ${parsedContacts.length} rows successfully`);
+              showToast(`Extracted ${parsedContacts.length} records successfully`);
               setCurrentScreen('data_preview');
-            }, 600);
+            }, 500);
           }
         } catch (err) {
-          generateSamplePreview('Excel');
+          setIsProcessing(false);
+          showToast('Failed to parse file. Please upload a valid CSV/Excel file.');
         }
       };
       reader.readAsArrayBuffer(file);
     } else {
-      // PDF or Image
-      setTimeout(() => {
-        generateSamplePreview(file.type.includes('image') ? 'Image OCR' : 'PDF Table');
-      }, 700);
-    }
-  };
-
-  const generateSamplePreview = (sourceType: string) => {
-    setIsProcessing(true);
-    setProcessingStatus(`Extracting tables via ${sourceType}...`);
-    setTimeout(() => {
-      const sampleContacts: Contact[] = [
-        {
-          id: `sample-1`,
-          organizationId: currentOrg.id,
-          periodId: currentPeriod.id,
-          externalId: '01',
-          name: 'Rahul Kumar',
-          phone: '+91 9876543210',
-          department: currentPeriod.departmentOrClass,
-          category: 'Defaulter',
-          overallAttendance: 62,
-          status: 'absent',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: `sample-2`,
-          organizationId: currentOrg.id,
-          periodId: currentPeriod.id,
-          externalId: '02',
-          name: 'Priya Sharma',
-          phone: '+91 9876543211',
-          department: currentPeriod.departmentOrClass,
-          category: 'Defaulter',
-          overallAttendance: 58,
-          status: 'absent',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: `sample-3`,
-          organizationId: currentOrg.id,
-          periodId: currentPeriod.id,
-          externalId: '03',
-          name: 'Ahmed Khan',
-          phone: '+91 9876543212',
-          department: currentPeriod.departmentOrClass,
-          category: 'Defaulter',
-          overallAttendance: 65,
-          status: 'absent',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: `sample-4`,
-          organizationId: currentOrg.id,
-          periodId: currentPeriod.id,
-          externalId: '04',
-          name: 'Sneha Reddy',
-          phone: '+91 9876543213',
-          department: currentPeriod.departmentOrClass,
-          category: 'Defaulter',
-          overallAttendance: 71,
-          status: 'absent',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: `sample-5`,
-          organizationId: currentOrg.id,
-          periodId: currentPeriod.id,
-          externalId: '05',
-          name: 'Karthik Raja',
-          phone: '+91 9876543214',
-          department: currentPeriod.departmentOrClass,
-          category: 'Defaulter',
-          overallAttendance: 60,
-          status: 'absent',
-          createdAt: new Date().toISOString()
-        }
-      ];
-
-      setUploadedPreviewData(sampleContacts);
       setIsProcessing(false);
-      showToast(`${sourceType} extraction completed. Please review before saving.`);
-      setCurrentScreen('data_preview');
-    }, 600);
+      showToast('PDF/Image extraction requires a supported CSV or Excel file.');
+    }
   };
 
   const handleFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {

@@ -5,7 +5,7 @@ import { UserRole, IndustryType } from '../types';
 import { signUpUser } from '../services/supabase';
 
 export const SignUpScreen: React.FC = () => {
-  const { setCurrentScreen, showToast, login, setIndustry } = useApp();
+  const { setCurrentScreen, showToast, login, setIndustry, createOrganization } = useApp();
 
   const [fullName, setFullName] = useState('');
   const [orgName, setOrgName] = useState('');
@@ -49,6 +49,7 @@ export const SignUpScreen: React.FC = () => {
       });
 
       setIndustry(industry);
+      createOrganization(orgName, industry, 'ORG-' + Date.now().toString().slice(-4), fullName, email);
       login(role);
       showToast(result.message || 'Account created successfully! Welcome.');
       setTimeout(() => {
@@ -157,7 +158,7 @@ export const SignUpScreen: React.FC = () => {
                 required
                 value={orgName}
                 onChange={e => setOrgName(e.target.value)}
-                placeholder="e.g. Apex Institute of Engineering"
+                placeholder="e.g. Acme Corporation"
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 36px',
@@ -213,7 +214,7 @@ export const SignUpScreen: React.FC = () => {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="ananya@apex.edu"
+                placeholder="admin@company.com"
                 style={{
                   width: '100%',
                   padding: '10px 12px 10px 36px',

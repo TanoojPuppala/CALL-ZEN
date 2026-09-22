@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import {
   User,
   Organization,
@@ -11,23 +11,14 @@ import {
   RetryItem,
   FollowUpItem,
   AuditLog,
+  LeaveRecord,
   ScreenType,
   IndustryType,
   IndustryTemplate,
   RoleMode
 } from '../types';
-import {
-  INDUSTRY_TEMPLATES,
-  SEED_ORGANIZATIONS,
-  SEED_USERS,
-  SEED_PERIODS,
-  SEED_CAMPAIGNS,
-  SEED_CONTACTS,
-  BANKING_SEED_CONTACTS,
-  SEED_RETRY_ITEMS,
-  SEED_CALL_REPORTS,
-  SEED_AUDIT_LOGS
-} from '../data/seedData';
+import { INDUSTRY_TEMPLATES } from '../data/seedData';
+import { SmartCallDB } from '../services/db';
 import {
   isSupabaseConfigured,
   fetchContactsFromSupabase,
@@ -48,6 +39,7 @@ interface AnalyticsSummary {
   completionRate: number;
   retryCount: number;
   followUpsCount: number;
+  approvedLeaveCount: number;
   orgCompletionRate: number;
   employeeCompletionRate: number;
   campaignsBreakdown: Array<{ name: string; rate: number; total: number; completed: number }>;
@@ -61,30 +53,34 @@ interface AppContextType {
   isDesktopView: boolean;
   setIsDesktopView: (val: boolean) => void;
 
-  // Industry Template & Customization (PRD Sections 1, 51, 52)
+  // Industry Template & Customization
   currentIndustry: IndustryType;
   currentTemplate: IndustryTemplate;
   setIndustry: (industry: IndustryType) => void;
 
-  // Dual Role Mode (PRD Sections 6, 78, 79)
+  // Role Mode
   roleMode: RoleMode;
   setRoleMode: (mode: RoleMode) => void;
 
   // Auth & Org
   currentUser: User | null;
-  currentOrg: Organization;
+  currentOrg: Organization | null;
   organizations: Organization[];
   setCurrentOrg: (org: Organization) => void;
+  createOrganization: (name: string, type: IndustryType, code: string, adminName: string, email: string) => void;
+
+  // Periods / Semesters
   periods: Period[];
-  currentPeriod: Period;
+  currentPeriod: Period | null;
   setCurrentPeriod: (period: Period) => void;
+  createPeriod: (name: string, year: string, deptClass: string, inChargeName?: string) => void;
   archivePeriod: (periodId: string) => void;
   restorePeriod: (periodId: string) => void;
   reassignInCharge: (periodId: string, newCallerId: string, newCallerName: string) => void;
   login: (role?: string) => void;
   logout: () => void;
 
-  // Contacts & Dynamic Selection (PRD Sections 16, 17, 18)
+  // Contacts
   contacts: Contact[];
   selectedContactIds: string[];
   toggleSelectContact: (id: string) => void;
@@ -95,10 +91,15 @@ interface AppContextType {
   updateContact: (updated: Contact) => void;
   deleteContact: (id: string) => void;
 
+  // Leave Records
+  leaveRecords: LeaveRecord[];
+  addLeaveRecord: (contactId: string, contactName: string, startDate: string, endDate: string, reason: string) => void;
+  isContactOnApprovedLeave: (contactId: string) => boolean;
+
   // Campaigns
   campaigns: Campaign[];
 
-  // Calling Session & State Machine (PRD Sections 19, 20, 21, 30, 31)
+  // Calling Session & State Machine
   callingSession: CallingSession | null;
   activeCallingContact: Contact | null;
   startCallingWorkflow: () => void;
@@ -113,22 +114,22 @@ interface AppContextType {
   resumeCallingWorkflow: () => void;
   cancelCallingWorkflow: () => void;
 
-  // Retry Engine & Re-Attend Queue (PRD Sections 27, 28, 29, 63, 64, 65)
+  // Retry Engine
   retryQueue: RetryItem[];
   retrySingleContact: (item: RetryItem) => void;
   scheduleRetryItem: (id: string, time: string) => void;
 
-  // Follow-ups & Call Reports (PRD Sections 23-26, 66)
+  // Follow-ups & Call Reports
   callReports: CallReport[];
   followUps: FollowUpItem[];
   auditLogs: AuditLog[];
   logAuditEvent: (action: string, details: string) => void;
 
-  // Analytics Engine & Export (PRD Sections 39-45, 80)
+  // Analytics Engine & Export
   getAnalyticsSummary: () => AnalyticsSummary;
   exportReport: (format: 'csv' | 'excel' | 'pdf', timeframe: string) => void;
 
-  // Uploaded Data Preview (PRD Section 12)
+  // Uploaded Data Preview
   uploadedPreviewData: Contact[];
   setUploadedPreviewData: (contacts: Contact[]) => void;
 
@@ -147,63 +148,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [previousScreen, setPreviousScreen] = useState<ScreenType>('dashboard');
   const [isDesktopView, setIsDesktopView] = useState<boolean>(false);
 
-  // Uploaded Data for Preview & Validation
+  // Uploaded Data for Preview
   const [uploadedPreviewData, setUploadedPreviewData] = useState<Contact[]>([]);
 
   // Industry Template & Dual Role Mode
   const [currentIndustry, setCurrentIndustry] = useState<IndustryType>('education');
   const [roleMode, setRoleMode] = useState<RoleMode>('admin');
 
-  // Core Entity State
-  const [organizations] = useState<Organization[]>(SEED_ORGANIZATIONS);
-  const [currentOrg, setCurrentOrg] = useState<Organization>(SEED_ORGANIZATIONS[0]);
-  const [currentUser, setCurrentUser] = useState<User | null>(SEED_USERS[0]);
-  const [periods, setPeriods] = useState<Period[]>(SEED_PERIODS);
-  const [currentPeriod, setCurrentPeriod] = useState<Period>(SEED_PERIODS[0]);
-  const [contacts, setContacts] = useState<Contact[]>(SEED_CONTACTS);
-  const [campaigns] = useState<Campaign[]>(SEED_CAMPAIGNS);
+  // Core Entity State initialized from persistent database
+  const [organizations, setOrganizations] = useState<Organization[]>(() => SmartCallDB.getOrganizations());
+  const [currentOrg, setCurrentOrg] = useState<Organization | null>(() => organizations[0] || null);
+  const [currentUser, setCurrentUser] = useState<User | null>(() => SmartCallDB.getCurrentUser());
+  const [periods, setPeriods] = useState<Period[]>(() => SmartCallDB.getPeriods());
+  const [currentPeriod, setCurrentPeriod] = useState<Period | null>(() => periods[0] || null);
+  const [contacts, setContacts] = useState<Contact[]>(() => SmartCallDB.getContacts());
+  const [leaveRecords, setLeaveRecords] = useState<LeaveRecord[]>(() => SmartCallDB.getLeaveRecords());
+  const [campaigns] = useState<Campaign[]>([]);
 
   // Selection & Calling Session State
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
-  const [callingSession, setCallingSession] = useState<CallingSession | null>(null);
+  const [callingSession, setCallingSession] = useState<CallingSession | null>(() => SmartCallDB.getActiveCallingSession());
   const [currentPendingReport, setCurrentPendingReport] = useState<Partial<CallReport> | null>(null);
 
   // Retry, Reports, Follow-ups, Audit
-  const [retryQueue, setRetryQueue] = useState<RetryItem[]>(SEED_RETRY_ITEMS);
-  const [callReports, setCallReports] = useState<CallReport[]>(SEED_CALL_REPORTS);
-  const [followUps, setFollowUps] = useState<FollowUpItem[]>([
-    {
-      id: 'fu-1',
-      contactId: 'contact-2',
-      contactName: 'Priya Sharma',
-      contactPhone: '+91 9876543211',
-      externalId: '02',
-      dueDate: '2026-09-20',
-      dueTime: '10:00 AM',
-      reason: 'Family Function',
-      notes: 'Returning tomorrow morning, check attendance.',
-      assignedCallerId: 'user-2',
-      assignedCallerName: 'Mr. Kumar',
-      status: 'pending'
-    }
-  ]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(SEED_AUDIT_LOGS);
+  const [retryQueue, setRetryQueue] = useState<RetryItem[]>(() => SmartCallDB.getRetryQueue());
+  const [callReports, setCallReports] = useState<CallReport[]>(() => SmartCallDB.getCallReports());
+  const [followUps, setFollowUps] = useState<FollowUpItem[]>(() => SmartCallDB.getFollowUps());
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => SmartCallDB.getAuditLogs());
 
   // Toast & Modals
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isVoiceAssistantOpen, setIsVoiceAssistantOpen] = useState<boolean>(false);
 
   // Load Supabase records if configured
-  React.useEffect(() => {
+  useEffect(() => {
     if (isSupabaseConfigured) {
       (async () => {
         const fetchedContacts = await fetchContactsFromSupabase();
         if (fetchedContacts && fetchedContacts.length > 0) {
           setContacts(fetchedContacts);
+          SmartCallDB.saveContacts(fetchedContacts);
         }
         const fetchedPeriods = await fetchPeriodsFromSupabase();
         if (fetchedPeriods && fetchedPeriods.length > 0) {
           setPeriods(fetchedPeriods);
+          SmartCallDB.savePeriods(fetchedPeriods);
         }
         const fetchedCallLogs = await fetchCallLogsFromSupabase();
         if (fetchedCallLogs && fetchedCallLogs.length > 0) {
@@ -232,108 +221,196 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const actorRole = currentUser ? currentUser.role : 'org_admin';
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
-      organizationId: currentOrg.id,
+      organizationId: currentOrg ? currentOrg.id : 'org-default',
       actorName,
       action,
       details,
       timestamp: new Date().toISOString()
     };
-    setAuditLogs(prev => [newLog, ...prev]);
+    setAuditLogs(prev => {
+      const updated = [newLog, ...prev];
+      SmartCallDB.addAuditLog(newLog);
+      return updated;
+    });
     if (isSupabaseConfigured) {
       saveAuditLogToSupabase(actorName, actorRole, action, details);
     }
   };
 
-  // Industry Template Switcher (Sections 51 & 52)
+  // Organization Setup Flow
+  const createOrganization = (name: string, type: IndustryType, code: string, adminName: string, email: string) => {
+    const newOrg: Organization = {
+      id: `org-${Date.now()}`,
+      name,
+      type,
+      code
+    };
+    const adminUser: User = {
+      id: `user-${Date.now()}`,
+      name: adminName,
+      email,
+      role: 'org_admin',
+      roleTitle: 'Organization Admin',
+      avatar: adminName.substring(0, 2).toUpperCase(),
+      organizationId: newOrg.id
+    };
+
+    SmartCallDB.saveOrganization(newOrg);
+    SmartCallDB.saveCurrentUser(adminUser);
+
+    setOrganizations(prev => [...prev, newOrg]);
+    setCurrentOrg(newOrg);
+    setCurrentUser(adminUser);
+
+    logAuditEvent('ORG_CREATED', `Created organization: ${name} (${type})`);
+    showToast(`Organization "${name}" created successfully!`);
+  };
+
+  // Period / Semester Creation
+  const createPeriod = (name: string, year: string, deptClass: string, inChargeName?: string) => {
+    const newPeriod: Period = {
+      id: `period-${Date.now()}`,
+      organizationId: currentOrg ? currentOrg.id : 'org-default',
+      year,
+      semesterOrPeriod: name,
+      departmentOrClass: deptClass,
+      assignedCallerName: inChargeName || (currentUser ? currentUser.name : 'Admin'),
+      isArchived: false,
+      totalContacts: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    setPeriods(prev => {
+      const updated = [...prev, newPeriod];
+      SmartCallDB.savePeriods(updated);
+      return updated;
+    });
+    if (!currentPeriod) setCurrentPeriod(newPeriod);
+
+    logAuditEvent('PERIOD_CREATED', `Created class/dataset: ${deptClass} (${year} ${name})`);
+    showToast(`Dataset "${deptClass}" created.`);
+  };
+
+  // Industry Template Switcher
   const setIndustry = (industry: IndustryType) => {
     setCurrentIndustry(industry);
-    if (industry === 'banking') {
-      setContacts(BANKING_SEED_CONTACTS);
-      const bankOrg = organizations.find(o => o.type === 'banking') || organizations[1];
-      setCurrentOrg(bankOrg);
-      const bankPeriod = periods.find(p => p.id === 'period-bank-1') || periods[0];
-      setCurrentPeriod(bankPeriod);
-      setSelectedContactIds([BANKING_SEED_CONTACTS[0].id, BANKING_SEED_CONTACTS[1].id]);
-    } else {
-      setContacts(SEED_CONTACTS);
-      setCurrentOrg(organizations[0]);
-      setCurrentPeriod(periods[0]);
-      setSelectedContactIds([]);
-    }
     logAuditEvent('INDUSTRY_SWITCHED', `Active industry template switched to: ${industry}`);
     showToast(`Switched template to ${INDUSTRY_TEMPLATES[industry].displayName}`);
   };
 
-  // Auth (Section 5 & 6)
+  // Auth
   const login = (roleOverride?: string) => {
-    const user = SEED_USERS.find(u => (roleOverride ? u.role === roleOverride : true)) || SEED_USERS[0];
-    setCurrentUser(user);
-    if (user.role === 'caller') {
-      setRoleMode('employee');
-    } else {
-      setRoleMode('admin');
+    if (!currentUser) {
+      const defaultAdmin: User = {
+        id: `user-admin`,
+        name: 'System Admin',
+        email: 'admin@smartcall.ai',
+        role: (roleOverride as any) || 'org_admin',
+        roleTitle: 'Administrator',
+        organizationId: currentOrg ? currentOrg.id : 'org-default'
+      };
+      setCurrentUser(defaultAdmin);
+      SmartCallDB.saveCurrentUser(defaultAdmin);
     }
-    logAuditEvent('LOGIN_SUCCESS', `Logged in as ${user.name} (${user.roleTitle})`);
-    showToast(`Welcome back, ${user.name}`);
+    setRoleMode(roleOverride === 'caller' ? 'employee' : 'admin');
+    showToast(`Welcome to SmartCall AI`);
     setCurrentScreen('dashboard');
   };
 
   const logout = () => {
     logAuditEvent('LOGOUT', `User ${currentUser?.name || ''} logged out`);
     setCurrentUser(null);
+    SmartCallDB.saveCurrentUser(null);
     setCurrentScreen('login');
   };
 
-  // Dataset Versioning & Period Management (Sections 13-15, 46-48)
-  const archivePeriod = (periodId: string) => {
-    setPeriods(prev =>
-      prev.map(p => (p.id === periodId ? { ...p, isArchived: true } : p))
+  // Leave Management & Approved Leave Invariant
+  const isContactOnApprovedLeave = (contactId: string): boolean => {
+    const today = new Date().toISOString().split('T')[0];
+    return leaveRecords.some(r =>
+      r.contactId === contactId &&
+      r.status === 'APPROVED' &&
+      r.startDate <= today &&
+      r.endDate >= today
     );
-    const p = periods.find(item => item.id === periodId);
-    logAuditEvent('PERIOD_ARCHIVED', `Archived dataset: ${p?.departmentOrClass} (${p?.year} ${p?.semesterOrPeriod})`);
-    showToast(`Dataset archived safely. Historical logs remain accessible.`);
+  };
+
+  const addLeaveRecord = (contactId: string, contactName: string, startDate: string, endDate: string, reason: string) => {
+    const newRecord: LeaveRecord = {
+      id: `leave-${Date.now()}`,
+      contactId,
+      contactName,
+      periodId: currentPeriod ? currentPeriod.id : undefined,
+      startDate,
+      endDate,
+      reason,
+      status: 'APPROVED',
+      requestedBy: currentUser?.name || 'Admin',
+      approvedBy: currentUser?.name || 'Admin',
+      createdAt: new Date().toISOString()
+    };
+
+    setLeaveRecords(prev => [newRecord, ...prev]);
+    SmartCallDB.saveLeaveRecord(newRecord);
+
+    logAuditEvent('LEAVE_APPROVED', `Approved leave for ${contactName} (${startDate} to ${endDate})`);
+    showToast(`Approved leave recorded for ${contactName}. Excluded from calling queue.`);
+  };
+
+  // Dataset Versioning & Period Management
+  const archivePeriod = (periodId: string) => {
+    setPeriods(prev => {
+      const updated = prev.map(p => (p.id === periodId ? { ...p, isArchived: true } : p));
+      SmartCallDB.savePeriods(updated);
+      return updated;
+    });
+    logAuditEvent('PERIOD_ARCHIVED', `Archived dataset ${periodId}`);
+    showToast(`Dataset archived safely.`);
   };
 
   const restorePeriod = (periodId: string) => {
-    setPeriods(prev =>
-      prev.map(p => (p.id === periodId ? { ...p, isArchived: false } : p))
-    );
-    const p = periods.find(item => item.id === periodId);
-    logAuditEvent('PERIOD_RESTORED', `Restored dataset: ${p?.departmentOrClass}`);
+    setPeriods(prev => {
+      const updated = prev.map(p => (p.id === periodId ? { ...p, isArchived: false } : p));
+      SmartCallDB.savePeriods(updated);
+      return updated;
+    });
+    logAuditEvent('PERIOD_RESTORED', `Restored dataset ${periodId}`);
     showToast(`Dataset restored to active.`);
   };
 
   const reassignInCharge = (periodId: string, newCallerId: string, newCallerName: string) => {
-    setPeriods(prev =>
-      prev.map(p =>
+    setPeriods(prev => {
+      const updated = prev.map(p =>
         p.id === periodId
           ? { ...p, assignedCallerId: newCallerId, assignedCallerName: newCallerName }
           : p
-      )
-    );
-    logAuditEvent(
-      'IN_CHARGE_REASSIGNED',
-      `Reassigned period ${periodId} in-charge to ${newCallerName}. Historical records preserved.`
-    );
+      );
+      SmartCallDB.savePeriods(updated);
+      return updated;
+    });
+    logAuditEvent('IN_CHARGE_REASSIGNED', `Reassigned period ${periodId} in-charge to ${newCallerName}`);
     showToast(`Class in-charge successfully reassigned to ${newCallerName}`);
   };
 
-  // Contacts Selection Methods (Sections 16, 17, 18)
+  // Contacts Selection Methods
   const toggleSelectContact = (id: string) => {
-    setSelectedContactIds(prev => {
-      if (prev.includes(id)) {
-        return prev.filter(item => item !== id);
-      } else {
-        return [...prev, id];
-      }
-    });
+    // Cannot select contacts on approved leave
+    if (isContactOnApprovedLeave(id)) {
+      showToast('Contact is on Approved Leave and cannot be queued for calling.');
+      return;
+    }
+    setSelectedContactIds(prev =>
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
   };
 
   const selectAbsentOnly = () => {
+    if (!currentPeriod) return;
     const absentIds = contacts
       .filter(
         c =>
           c.periodId === currentPeriod.id &&
+          !isContactOnApprovedLeave(c.id) &&
           ((c.overallAttendance && c.overallAttendance < 75) ||
             c.status === 'absent' ||
             c.priority === 'urgent' ||
@@ -341,13 +418,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
       .map(c => c.id);
     setSelectedContactIds(absentIds);
-    showToast(`Selected ${absentIds.length} contacts needing attention`);
+    showToast(`Selected ${absentIds.length} eligible contacts needing attention`);
   };
 
   const selectAllContacts = () => {
-    const allIds = contacts.filter(c => c.periodId === currentPeriod.id).map(c => c.id);
+    if (!currentPeriod) return;
+    const allIds = contacts
+      .filter(c => c.periodId === currentPeriod.id && !isContactOnApprovedLeave(c.id))
+      .map(c => c.id);
     setSelectedContactIds(allIds);
-    showToast(`Selected all ${allIds.length} contacts in ${currentPeriod.departmentOrClass}`);
+    showToast(`Selected all ${allIds.length} eligible contacts`);
   };
 
   const clearContactSelection = () => {
@@ -356,7 +436,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addContacts = (newContacts: Contact[]) => {
-    setContacts(prev => [...newContacts, ...prev]);
+    setContacts(prev => {
+      const updated = [...newContacts, ...prev];
+      SmartCallDB.saveContacts(updated);
+      return updated;
+    });
     if (isSupabaseConfigured) {
       syncContactsToSupabase(newContacts);
     }
@@ -365,7 +449,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateContact = (updated: Contact) => {
-    setContacts(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+    setContacts(prev => {
+      const updatedList = prev.map(c => (c.id === updated.id ? updated : c));
+      SmartCallDB.saveContacts(updatedList);
+      return updatedList;
+    });
     if (isSupabaseConfigured) {
       syncContactsToSupabase([updated]);
     }
@@ -374,7 +462,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteContact = (id: string) => {
     const contact = contacts.find(c => c.id === id);
-    setContacts(prev => prev.filter(c => c.id !== id));
+    setContacts(prev => {
+      const filtered = prev.filter(c => c.id !== id);
+      SmartCallDB.saveContacts(filtered);
+      return filtered;
+    });
     setSelectedContactIds(prev => prev.filter(selectedId => selectedId !== id));
     if (isSupabaseConfigured) {
       deleteContactFromSupabase(id);
@@ -390,23 +482,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return contacts.find(c => c.id === contactId) || null;
   }, [callingSession, contacts]);
 
-  // Calling State Machine Invariant:
-  // Contacts selected -> Ready to Call -> Confirmation -> Start Calling!
+  // Calling Session Workflows
   const startCallingWorkflow = () => {
-    if (selectedContactIds.length === 0) {
-      showToast('Please select at least one contact to call.');
+    // Filter out any contacts on approved leave
+    const eligibleContactIds = selectedContactIds.filter(id => !isContactOnApprovedLeave(id));
+
+    if (eligibleContactIds.length === 0) {
+      showToast('Please select at least one eligible contact to call.');
       return;
     }
 
     const session: CallingSession = {
       id: `session-${Date.now()}`,
-      organizationId: currentOrg.id,
-      periodId: currentPeriod.id,
+      organizationId: currentOrg ? currentOrg.id : 'org-default',
+      periodId: currentPeriod ? currentPeriod.id : 'period-default',
       campaignId: 'camp-1',
       campaignName: currentTemplate.primaryCampaignName,
-      callerId: currentUser?.id || 'user-2',
-      callerName: currentUser?.name || 'Mr. Kumar',
-      selectedContactIds: [...selectedContactIds],
+      callerId: currentUser?.id || 'user-default',
+      callerName: currentUser?.name || 'Caller',
+      selectedContactIds: [...eligibleContactIds],
       currentIndex: 0,
       state: 'calling',
       completedCount: 0,
@@ -416,29 +510,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCallingSession(session);
+    SmartCallDB.saveCallingSession(session);
     logAuditEvent(
       'CALLING_STARTED',
-      `Started calling session with ${session.selectedContactIds.length} selected contacts (Campaign: ${session.campaignName})`
+      `Started calling session with ${session.selectedContactIds.length} selected contacts`
     );
     setCurrentScreen('calling');
   };
 
-  // Launch calling workflow on Retry Queue (Section 28)
   const startRetryWorkflow = () => {
     const retryContactIds = retryQueue.map(item => item.contactId);
     if (retryContactIds.length === 0) {
-      showToast('Re-Attend Queue is currently empty! 🎉');
+      showToast('Re-Attend Queue is currently empty.');
       return;
     }
 
     const session: CallingSession = {
       id: `retry-session-${Date.now()}`,
-      organizationId: currentOrg.id,
-      periodId: currentPeriod.id,
+      organizationId: currentOrg ? currentOrg.id : 'org-default',
+      periodId: currentPeriod ? currentPeriod.id : 'period-default',
       campaignId: 'camp-retry',
       campaignName: 'Re-Attend Calls Queue',
-      callerId: currentUser?.id || 'user-2',
-      callerName: currentUser?.name || 'Mr. Kumar',
+      callerId: currentUser?.id || 'user-default',
+      callerName: currentUser?.name || 'Caller',
       selectedContactIds: retryContactIds,
       currentIndex: 0,
       state: 'calling',
@@ -449,12 +543,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCallingSession(session);
-    logAuditEvent('RETRY_SESSION_STARTED', `Started Re-Attend calling for ${retryContactIds.length} unanswered contacts`);
-    showToast(`Starting Re-Attend calling for ${retryContactIds.length} contacts`);
+    SmartCallDB.saveCallingSession(session);
+    logAuditEvent('RETRY_SESSION_STARTED', `Started Re-Attend calling for ${retryContactIds.length} contacts`);
     setCurrentScreen('calling');
   };
 
-  // End active call and prepare AI suggested report (Sections 21-24)
   const endActiveCall = (durationSeconds: number, outcomeHint?: CallOutcome) => {
     if (!callingSession || !activeCallingContact) return;
 
@@ -463,9 +556,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let followUpRequired = false;
 
     if (outcome === 'answered') {
-      const reasons = ['Fever', 'Family Function', 'Out of Station', 'Medical Checkup', 'Bus delay'];
-      reason = reasons[callingSession.currentIndex % reasons.length];
-      followUpRequired = reason === 'Family Function';
+      reason = 'Contact Answered';
+      followUpRequired = false;
     } else if (outcome === 'no_answer') {
       reason = 'Not Picked';
       followUpRequired = true;
@@ -487,8 +579,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contactName: activeCallingContact.name,
       contactPhone: activeCallingContact.phone,
       externalId: activeCallingContact.externalId,
-      callerId: currentUser?.id || 'user-2',
-      callerName: currentUser?.name || 'Mr. Kumar',
+      callerId: currentUser?.id || 'user-default',
+      callerName: currentUser?.name || 'Caller',
       campaignName: callingSession.campaignName,
       durationSeconds,
       outcome,
@@ -501,11 +593,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCurrentPendingReport(suggestedReport);
-    setCallingSession(prev => (prev ? { ...prev, state: 'call_ended', updatedAt: new Date().toISOString() } : null));
+    setCallingSession(prev => {
+      const updated = prev ? { ...prev, state: 'call_ended' as const, updatedAt: new Date().toISOString() } : null;
+      SmartCallDB.saveCallingSession(updated);
+      return updated;
+    });
     setCurrentScreen('post_call_report');
   };
 
-  // Confirm post-call report (Sections 25, 27, 59, 63)
   const confirmPostCallReport = (reportData: Partial<CallReport>) => {
     if (!callingSession || !activeCallingContact) return;
 
@@ -516,8 +611,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contactName: activeCallingContact.name,
       contactPhone: activeCallingContact.phone,
       externalId: activeCallingContact.externalId,
-      callerId: currentUser?.id || 'user-2',
-      callerName: currentUser?.name || 'Mr. Kumar',
+      callerId: currentUser?.id || 'user-default',
+      callerName: currentUser?.name || 'Caller',
       campaignName: callingSession.campaignName,
       durationSeconds: reportData.durationSeconds || 0,
       outcome: reportData.outcome || 'answered',
@@ -531,11 +626,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCallReports(prev => [fullReport, ...prev]);
+    SmartCallDB.saveCallReport(fullReport);
+
     if (isSupabaseConfigured) {
       saveCallLogToSupabase(fullReport);
     }
 
-    // PRD INVARIANT: Unreachable contacts enter retry queue, NOT completed!
     const isUnreachable = ['no_answer', 'busy', 'switched_off', 'callback_required'].includes(fullReport.outcome);
 
     if (isUnreachable) {
@@ -566,15 +662,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           timestamp: new Date().toISOString()
         };
 
-        return [updatedItem, ...prev.filter(r => r.contactId !== activeCallingContact.id)];
+        const updatedQueue = [updatedItem, ...prev.filter(r => r.contactId !== activeCallingContact.id)];
+        SmartCallDB.saveRetryQueue(updatedQueue);
+        return updatedQueue;
       });
-      showToast(`${activeCallingContact.name} moved to Re-Attend Retry Queue`);
+      showToast(`${activeCallingContact.name} moved to Retry Queue`);
     } else if (fullReport.outcome === 'answered') {
-      // Remove from retry queue if was present
-      setRetryQueue(prev => prev.filter(r => r.contactId !== activeCallingContact.id));
+      setRetryQueue(prev => {
+        const filtered = prev.filter(r => r.contactId !== activeCallingContact.id);
+        SmartCallDB.saveRetryQueue(filtered);
+        return filtered;
+      });
     }
 
-    // Schedule follow-up if requested
     if (fullReport.followUpRequired && fullReport.followUpDate) {
       const newFollowUp: FollowUpItem = {
         id: `fu-${Date.now()}`,
@@ -586,42 +686,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dueTime: fullReport.followUpTime || '10:00 AM',
         reason: fullReport.reason,
         notes: fullReport.followUpNotes || '',
-        assignedCallerId: currentUser?.id || 'user-2',
-        assignedCallerName: currentUser?.name || 'Mr. Kumar',
+        assignedCallerId: currentUser?.id || 'user-default',
+        assignedCallerName: currentUser?.name || 'Caller',
         status: 'pending'
       };
-      setFollowUps(prev => [newFollowUp, ...prev]);
+      setFollowUps(prev => {
+        const updated = [newFollowUp, ...prev];
+        SmartCallDB.saveFollowUps(updated);
+        return updated;
+      });
     }
 
     logAuditEvent(
       'CALL_REPORT_CONFIRMED',
-      `Confirmed report for ${activeCallingContact.name} (Status: ${fullReport.outcome}, Reason: ${fullReport.reason})`
+      `Recorded call for ${activeCallingContact.name} (${fullReport.outcome})`
     );
 
-    // Update calling session counts
     const updatedCompleted = !isUnreachable ? callingSession.completedCount + 1 : callingSession.completedCount;
     const updatedRetry = isUnreachable ? callingSession.retryCount + 1 : callingSession.retryCount;
     const nextIndex = callingSession.currentIndex + 1;
 
     if (nextIndex < callingSession.selectedContactIds.length) {
-      setCallingSession({
+      const nextSession = {
         ...callingSession,
         currentIndex: nextIndex,
-        state: 'next_contact',
+        state: 'next_contact' as const,
         completedCount: updatedCompleted,
         retryCount: updatedRetry,
         updatedAt: new Date().toISOString()
-      });
+      };
+      setCallingSession(nextSession);
+      SmartCallDB.saveCallingSession(nextSession);
       setCurrentScreen('next_call');
     } else {
-      // Queue Finished!
-      setCallingSession({
+      const completedSession = {
         ...callingSession,
-        state: 'completed',
+        state: 'completed' as const,
         completedCount: updatedCompleted,
         retryCount: updatedRetry,
         updatedAt: new Date().toISOString()
-      });
+      };
+      setCallingSession(completedSession);
+      SmartCallDB.saveCallingSession(null);
       confetti({
         particleCount: 130,
         spread: 75,
@@ -634,7 +740,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const startNextQueuedCall = () => {
     if (!callingSession) return;
-    setCallingSession(prev => (prev ? { ...prev, state: 'calling', updatedAt: new Date().toISOString() } : null));
+    const updated = { ...callingSession, state: 'calling' as const, updatedAt: new Date().toISOString() };
+    setCallingSession(updated);
+    SmartCallDB.saveCallingSession(updated);
     setCurrentScreen('calling');
   };
 
@@ -642,12 +750,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!callingSession) return;
     const nextIndex = callingSession.currentIndex + 1;
     if (nextIndex < callingSession.selectedContactIds.length) {
-      setCallingSession({
+      const updated = {
         ...callingSession,
         currentIndex: nextIndex,
-        state: 'next_contact',
+        state: 'next_contact' as const,
         updatedAt: new Date().toISOString()
-      });
+      };
+      setCallingSession(updated);
+      SmartCallDB.saveCallingSession(updated);
       showToast('Skipped contact');
     } else {
       showToast('Queue complete');
@@ -655,19 +765,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Pause and Resume Invariant: Never lose position (Sections 30, 31, 68)
   const pauseCallingWorkflow = () => {
     if (!callingSession) return;
-    setCallingSession({
+    const updated = {
       ...callingSession,
-      state: 'paused',
+      state: 'paused' as const,
       updatedAt: new Date().toISOString()
-    });
-    logAuditEvent(
-      'CALLING_PAUSED',
-      `Paused calling queue at position ${callingSession.currentIndex + 1} of ${callingSession.selectedContactIds.length}`
-    );
-    showToast(`Calling paused at contact ${callingSession.currentIndex + 1}. Progress saved.`);
+    };
+    setCallingSession(updated);
+    SmartCallDB.saveCallingSession(updated);
+    logAuditEvent('CALLING_PAUSED', `Paused queue at contact ${callingSession.currentIndex + 1}`);
+    showToast(`Calling paused at contact ${callingSession.currentIndex + 1}. Position saved.`);
     setCurrentScreen('dashboard');
   };
 
@@ -676,35 +784,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('No active session to resume');
       return;
     }
-    setCallingSession({
+    const updated = {
       ...callingSession,
-      state: 'next_contact',
+      state: 'next_contact' as const,
       updatedAt: new Date().toISOString()
-    });
-    logAuditEvent('CALLING_RESUMED', `Resumed calling queue from contact ${callingSession.currentIndex + 1}`);
-    showToast(`Resumed calling from contact ${callingSession.currentIndex + 1}`);
+    };
+    setCallingSession(updated);
+    SmartCallDB.saveCallingSession(updated);
     setCurrentScreen('next_call');
   };
 
   const cancelCallingWorkflow = () => {
     setCallingSession(null);
+    SmartCallDB.saveCallingSession(null);
     showToast('Calling queue closed');
     setCurrentScreen('student_list');
   };
 
-  // Retry Operations
   const retrySingleContact = (item: RetryItem) => {
     const contact = contacts.find(c => c.id === item.contactId);
     if (!contact) return;
 
     const retrySession: CallingSession = {
       id: `retry-single-${Date.now()}`,
-      organizationId: currentOrg.id,
-      periodId: currentPeriod.id,
+      organizationId: currentOrg ? currentOrg.id : 'org-default',
+      periodId: currentPeriod ? currentPeriod.id : 'period-default',
       campaignId: 'camp-retry',
       campaignName: 'Single Retry Call',
-      callerId: currentUser?.id || 'user-2',
-      callerName: currentUser?.name || 'Mr. Kumar',
+      callerId: currentUser?.id || 'user-default',
+      callerName: currentUser?.name || 'Caller',
       selectedContactIds: [contact.id],
       currentIndex: 0,
       state: 'calling',
@@ -715,34 +823,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCallingSession(retrySession);
+    SmartCallDB.saveCallingSession(retrySession);
     setCurrentScreen('calling');
   };
 
   const scheduleRetryItem = (id: string, time: string) => {
-    setRetryQueue(prev =>
-      prev.map(item => (item.id === id ? { ...item, status: 'scheduled', scheduledTime: time } : item))
-    );
+    setRetryQueue(prev => {
+      const updated = prev.map(item => (item.id === id ? { ...item, status: 'scheduled' as const, scheduledTime: time } : item));
+      SmartCallDB.saveRetryQueue(updated);
+      return updated;
+    });
     showToast(`Contact scheduled for callback at ${time}`);
   };
 
-  // Dynamic Analytics Engine (PRD Sections 39-45)
-  // Formula: Completion % = Completed / Assigned * 100
+  // Database-Driven Analytics Engine (Strictly 0 when database is empty)
   const getAnalyticsSummary = (): AnalyticsSummary => {
     const totalContacts = contacts.length;
-    const assignedToday = callingSession ? callingSession.selectedContactIds.length : 20;
+    const assignedToday = callingSession ? callingSession.selectedContactIds.length : 0;
     const completedToday = callReports.filter(r => r.outcome === 'answered').length;
     const pendingToday = Math.max(0, assignedToday - completedToday);
-    const completionRate = assignedToday > 0 ? Math.round((completedToday / assignedToday) * 100) : 75;
-
-    // Independent Org vs Employee (Section 44)
-    const orgCompletionRate = 80;
-    const employeeCompletionRate = completionRate;
-
-    const campaignsBreakdown = [
-      { name: 'Attendance Follow-up', rate: 85, total: 20, completed: 17 },
-      { name: 'Fee Reminder Campaign', rate: 72, total: 30, completed: 22 },
-      { name: 'Interview Confirmation', rate: 91, total: 100, completed: 91 }
-    ];
+    const completionRate = assignedToday > 0 ? Math.round((completedToday / assignedToday) * 100) : 0;
+    const approvedLeaveCount = leaveRecords.filter(r => r.status === 'APPROVED').length;
 
     return {
       totalContacts,
@@ -752,20 +853,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completionRate,
       retryCount: retryQueue.length,
       followUpsCount: followUps.length,
-      orgCompletionRate,
-      employeeCompletionRate,
-      campaignsBreakdown
+      approvedLeaveCount,
+      orgCompletionRate: completionRate,
+      employeeCompletionRate: completionRate,
+      campaignsBreakdown: []
     };
   };
 
-  // Report Export Engine (PRD Section 80)
   const exportReport = (format: 'csv' | 'excel' | 'pdf', timeframe: string) => {
     const analytics = getAnalyticsSummary();
     const rows = [
-      ['SmartCall AI - Executive Calling Report'],
+      ['SmartCall AI - Calling Report'],
       [`Generated At: ${new Date().toLocaleString()}`],
       [`Timeframe: ${timeframe.toUpperCase()}`],
-      [`Organization: ${currentOrg.name}`],
+      [`Organization: ${currentOrg ? currentOrg.name : 'Not Configured'}`],
       [''],
       ['Metric', 'Value'],
       ['Total Contacts', analytics.totalContacts.toString()],
@@ -774,7 +875,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ['Pending Calls', analytics.pendingToday.toString()],
       ['Completion Rate', `${analytics.completionRate}%`],
       ['Retry Queue Count', analytics.retryCount.toString()],
-      ['Follow-ups Due', analytics.followUpsCount.toString()],
+      ['Approved Leave Count', analytics.approvedLeaveCount.toString()],
       [''],
       ['Recent Call Reports'],
       ['Name', 'Phone', 'Outcome', 'Reason', 'Duration (s)', 'Timestamp'],
@@ -818,9 +919,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentOrg,
         organizations,
         setCurrentOrg,
+        createOrganization,
         periods,
         currentPeriod,
         setCurrentPeriod,
+        createPeriod,
         archivePeriod,
         restorePeriod,
         reassignInCharge,
@@ -835,6 +938,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addContacts,
         updateContact,
         deleteContact,
+        leaveRecords,
+        addLeaveRecord,
+        isContactOnApprovedLeave,
         campaigns,
         callingSession,
         activeCallingContact,

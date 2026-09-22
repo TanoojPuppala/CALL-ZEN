@@ -4,7 +4,7 @@ import { Home, Database, Phone, BarChart2, User } from 'lucide-react';
 import { ScreenType } from '../../types';
 
 export const BottomNavigation: React.FC = () => {
-  const { currentScreen, setCurrentScreen, showToast } = useApp();
+  const { currentScreen, setCurrentScreen, showToast, currentUser, currentOrg } = useApp();
 
   const isHomeActive = currentScreen === 'dashboard';
   const isDataActive = ['data_management', 'upload_data', 'data_preview', 'select_period'].includes(currentScreen);
@@ -101,7 +101,7 @@ export const BottomNavigation: React.FC = () => {
 
       {/* 5. Profile */}
       <button
-        onClick={() => showToast('Admin Profile: Mr. Srinivas Rao (Apex Institute)')}
+        onClick={() => showToast(`Profile: ${currentUser ? currentUser.name : 'Admin'} (${currentOrg ? currentOrg.name : 'Not Configured'})`)}
         style={{
           background: 'none',
           border: 'none',

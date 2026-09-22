@@ -387,7 +387,7 @@ export const AppShell: React.FC = () => {
                       {currentUser?.name || (roleMode === 'admin' ? 'Administrator' : 'Caller Staff')}
                     </div>
                     <div style={{ fontSize: '10px', color: '#94A3B8', textTransform: 'capitalize' }}>
-                      {roleMode === 'admin' ? 'Organization Admin' : 'Calling In-Charge'} • {currentOrg.name}
+                      {roleMode === 'admin' ? 'Organization Admin' : 'Calling In-Charge'} • {currentOrg ? currentOrg.name : 'Not Configured'}
                     </div>
                   </div>
                 </div>

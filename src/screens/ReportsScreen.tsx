@@ -3,42 +3,24 @@ import { useApp } from '../context/AppContext';
 import { ChevronLeft, Download, FileSpreadsheet, FileText, CheckCircle2, TrendingUp } from 'lucide-react';
 
 export const ReportsScreen: React.FC = () => {
-  const { setCurrentScreen, getAnalyticsSummary, callReports, exportReport, currentTemplate } = useApp();
+  const { setCurrentScreen, getAnalyticsSummary, callReports, exportReport, currentUser } = useApp();
   const [activeTab, setActiveTab] = useState<'daily' | 'weekly' | 'monthly' | 'overall'>('daily');
 
   const analytics = getAnalyticsSummary();
 
-  // Dynamic values depending on timeframe
+  // Calculate real DB values
+  const totalCalls = callReports.length;
+  const answeredCalls = callReports.filter(r => r.outcome === 'answered').length;
+  const unansweredCalls = callReports.filter(r => ['no_answer', 'busy', 'switched_off', 'callback_required'].includes(r.outcome)).length;
+  const dbRate = totalCalls > 0 ? Math.round((answeredCalls / totalCalls) * 100) : 0;
+
   const timeframeData = {
-    daily: {
-      assigned: analytics.assignedToday,
-      completed: analytics.completedToday,
-      answered: analytics.completedToday,
-      unanswered: analytics.pendingToday,
-      rate: analytics.completionRate
-    },
-    weekly: {
-      assigned: 100,
-      completed: 82,
-      answered: 82,
-      unanswered: 18,
-      rate: 82
-    },
-    monthly: {
-      assigned: 500,
-      completed: 430,
-      answered: 430,
-      unanswered: 70,
-      rate: 86
-    },
-    overall: {
-      assigned: 2450,
-      completed: 1960,
-      answered: 1960,
-      unanswered: 490,
-      rate: 80
-    }
-  }[activeTab];
+    assigned: totalCalls > 0 ? totalCalls : analytics.assignedToday,
+    completed: totalCalls > 0 ? totalCalls : analytics.completedToday,
+    answered: totalCalls > 0 ? answeredCalls : analytics.completedToday,
+    unanswered: totalCalls > 0 ? unansweredCalls : analytics.pendingToday,
+    rate: totalCalls > 0 ? dbRate : analytics.completionRate
+  };
 
   // Count reasons dynamically from callReports
   const reasonCounts: Record<string, number> = {};
@@ -205,15 +187,15 @@ export const ReportsScreen: React.FC = () => {
         </h4>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '10px' }}>
           <div style={{ background: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
-            <span style={{ fontSize: '10px', color: '#64748B', display: 'block' }}>Caller (Mr. Kumar)</span>
+            <span style={{ fontSize: '10px', color: '#64748B', display: 'block' }}>Caller ({currentUser?.name || 'Caller'})</span>
             <strong style={{ fontSize: '16px', color: '#2563EB' }}>{analytics.employeeCompletionRate}%</strong>
-            <span style={{ fontSize: '9px', color: '#64748B', display: 'block' }}>Assigned: 20 • Done: 15</span>
+            <span style={{ fontSize: '9px', color: '#64748B', display: 'block' }}>Active Calling Queue</span>
           </div>
 
           <div style={{ background: '#FFFFFF', padding: '8px 10px', borderRadius: '8px', border: '1px solid #CBD5E1' }}>
             <span style={{ fontSize: '10px', color: '#64748B', display: 'block' }}>Total Organization</span>
             <strong style={{ fontSize: '16px', color: '#15803D' }}>{analytics.orgCompletionRate}%</strong>
-            <span style={{ fontSize: '9px', color: '#64748B', display: 'block' }}>Assigned: 2,450 • Done: 1,960</span>
+            <span style={{ fontSize: '9px', color: '#64748B', display: 'block' }}>Total Contacts: {analytics.totalContacts}</span>
           </div>
         </div>
       </div>

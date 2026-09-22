@@ -45,12 +45,12 @@ export const CallingScreen: React.FC = () => {
     return () => clearInterval(interval);
   }, [callState]);
 
-  const contactName = activeCallingContact?.name || 'Rahul Kumar';
-  const contactPhone = activeCallingContact?.phone || '+91 9876543210';
-  const contactId = activeCallingContact?.externalId || '01';
+  const contactName = activeCallingContact?.name || 'Contact';
+  const contactPhone = activeCallingContact?.phone || '';
+  const contactId = activeCallingContact?.externalId || 'ID';
   const campaignName = callingSession?.campaignName || currentTemplate.primaryCampaignName;
-  const queueIndex = callingSession ? callingSession.currentIndex + 1 : 1;
-  const queueTotal = callingSession ? callingSession.selectedContactIds.length : 20;
+  const queueIndex = callingSession ? callingSession.currentIndex + 1 : 0;
+  const queueTotal = callingSession ? callingSession.selectedContactIds.length : 0;
   const initialLetter = contactName.charAt(0).toUpperCase();
 
   const formatTimer = (totalSeconds: number) => {

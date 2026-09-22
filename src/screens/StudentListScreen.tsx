@@ -23,7 +23,7 @@ export const StudentListScreen: React.FC = () => {
   const [showContactPicker, setShowContactPicker] = useState(false);
 
   // Filter contacts by period and search query
-  const periodContacts = contacts.filter(c => c.periodId === currentPeriod.id || !c.periodId);
+  const periodContacts = contacts.filter(c => currentPeriod ? (c.periodId === currentPeriod.id || !c.periodId) : true);
 
   const filteredContacts = periodContacts.filter(c => {
     // Search query match
@@ -85,10 +85,10 @@ export const StudentListScreen: React.FC = () => {
           </button>
           <div>
             <h2 style={{ fontSize: '15px', fontWeight: 800, color: 'var(--text-900)', margin: 0 }}>
-              {currentPeriod.departmentOrClass} ({currentPeriod.semesterOrPeriod})
+              {currentPeriod ? `${currentPeriod.departmentOrClass} (${currentPeriod.semesterOrPeriod})` : 'All Contacts'}
             </h2>
             <span style={{ fontSize: '11px', color: '#64748B' }}>
-              In-Charge: {currentPeriod.assignedCallerName || 'Mr. Kumar'}
+              In-Charge: {currentPeriod ? (currentPeriod.assignedCallerName || 'Admin') : 'Admin'}
             </span>
           </div>
         </div>

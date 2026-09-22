@@ -192,6 +192,20 @@ export interface AuditLog {
   timestamp: string;
 }
 
+export interface LeaveRecord {
+  id: string;
+  contactId: string;
+  contactName?: string;
+  periodId?: string;
+  startDate: string;
+  endDate: string;
+  reason: string;
+  status: 'APPROVED' | 'PENDING' | 'REJECTED';
+  requestedBy?: string;
+  approvedBy?: string;
+  createdAt: string;
+}
+
 export type ScreenType =
   | 'splash'
   | 'login'

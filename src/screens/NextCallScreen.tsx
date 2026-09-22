@@ -14,14 +14,14 @@ export const NextCallScreen: React.FC = () => {
     currentTemplate
   } = useApp();
 
-  const nextContactName = activeCallingContact?.name || 'Priya Sharma';
-  const nextContactPhone = activeCallingContact?.phone || '+91 9876543211';
-  const nextContactId = activeCallingContact?.externalId || '02';
+  const nextContactName = activeCallingContact?.name || 'Contact';
+  const nextContactPhone = activeCallingContact?.phone || '';
+  const nextContactId = activeCallingContact?.externalId || 'ID';
   const initialLetter = nextContactName.charAt(0).toUpperCase();
 
   const isPaused = callingSession?.state === 'paused';
-  const queueIndex = callingSession ? callingSession.currentIndex + 1 : 2;
-  const totalInQueue = callingSession ? callingSession.selectedContactIds.length : 20;
+  const queueIndex = callingSession ? callingSession.currentIndex + 1 : 0;
+  const totalInQueue = callingSession ? callingSession.selectedContactIds.length : 0;
   const remainingInQueue = Math.max(0, totalInQueue - queueIndex);
 
   return (

@@ -23,9 +23,9 @@ export const PostCallReportScreen: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [voiceSpoken, setVoiceSpoken] = useState<string>('');
 
-  const contactName = activeCallingContact?.name || 'Rahul Kumar';
-  const contactPhone = activeCallingContact?.phone || '+91 9876543210';
-  const durationSec = currentPendingReport?.durationSeconds || 135;
+  const contactName = activeCallingContact?.name || 'Contact';
+  const contactPhone = activeCallingContact?.phone || '';
+  const durationSec = currentPendingReport?.durationSeconds || 0;
   const initialLetter = contactName.charAt(0).toUpperCase();
 
   const outcomeOptions: Array<{ key: CallOutcome; label: string; icon: string; bg: string; color: string }> = [

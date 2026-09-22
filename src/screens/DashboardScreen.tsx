@@ -39,6 +39,35 @@ export const DashboardScreen: React.FC = () => {
   const analytics = getAnalyticsSummary();
   const isPaused = callingSession?.state === 'paused';
 
+  const renderEmptyOrgState = () => (
+    <div style={{ background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: '16px', padding: '24px 16px', textAlign: 'center', margin: '20px 0' }}>
+      <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#EFF6FF', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+        <Sparkles size={24} />
+      </div>
+      <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#1E293B', margin: '0 0 6px' }}>Welcome to SmartCall AI</h3>
+      <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 18px', lineHeight: 1.5 }}>
+        No organization or contacts configured yet. Start by setting up your organization or importing contacts.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <button
+          type="button"
+          onClick={() => setCurrentScreen('signup')}
+          className="btn-primary"
+          style={{ height: '44px', fontSize: '13px', fontWeight: 700, borderRadius: '10px' }}
+        >
+          Create Organization
+        </button>
+        <button
+          type="button"
+          onClick={() => setCurrentScreen('upload_data')}
+          style={{ height: '44px', fontSize: '13px', fontWeight: 700, borderRadius: '10px', background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#334155', cursor: 'pointer' }}
+        >
+          Import Contacts
+        </button>
+      </div>
+    </div>
+  );
+
   const renderAdminDashboard = () => (
     <>
       {/* 4 Metric Top Cards matching PRD Section 7 & 77 */}
@@ -542,7 +571,7 @@ export const DashboardScreen: React.FC = () => {
               {roleMode === 'admin' ? `Hello, ${currentUser?.name || 'Admin'}` : 'Good Morning, Teacher 👋'}
             </h3>
             <span style={{ fontSize: '11px', color: 'var(--text-500)' }}>
-              {roleMode === 'admin' ? `${currentOrg.name}` : `${currentTemplate.primaryCampaignName}`}
+              {roleMode === 'admin' ? `${currentOrg ? currentOrg.name : 'Organization Not Configured'}` : `${currentTemplate.primaryCampaignName}`}
             </span>
           </div>
         </div>

@@ -15,23 +15,28 @@ export const DataPreviewScreen: React.FC = () => {
 
   const [isEditing, setIsEditing] = useState(false);
 
-  // Use uploadedPreviewData if available, else standard fallback
-  const initialContacts: Contact[] =
-    uploadedPreviewData.length > 0
-      ? uploadedPreviewData
-      : [
-          { id: 'p-1', organizationId: 'org-1', periodId: currentPeriod.id, externalId: '01', name: 'Rahul Kumar', phone: '+91 9876543210', createdAt: '' },
-          { id: 'p-2', organizationId: 'org-1', periodId: currentPeriod.id, externalId: '02', name: 'Priya Sharma', phone: '+91 9876543211', createdAt: '' },
-          { id: 'p-3', organizationId: 'org-1', periodId: currentPeriod.id, externalId: '03', name: 'Ahmed Khan', phone: '+91 9876543212', createdAt: '' },
-          { id: 'p-4', organizationId: 'org-1', periodId: currentPeriod.id, externalId: '04', name: 'Sneha Reddy', phone: '+91 9876543213', createdAt: '' },
-          { id: 'p-5', organizationId: 'org-1', periodId: currentPeriod.id, externalId: '05', name: 'Karthik Raja', phone: '+91 9876543214', createdAt: '' }
-        ];
+  const [records, setRecords] = useState<Contact[]>(uploadedPreviewData);
 
-  const [records, setRecords] = useState<Contact[]>(initialContacts);
+  if (records.length === 0) {
+    return (
+      <div style={{ flex: 1, padding: '24px 16px', textAlign: 'center', background: '#FFFFFF' }}>
+        <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1E293B', margin: '0 0 8px' }}>No Data Selected for Preview</h3>
+        <p style={{ fontSize: '12px', color: '#64748B', margin: '0 0 16px' }}>Please upload or select a CSV/Excel file to extract contacts.</p>
+        <button
+          type="button"
+          onClick={() => setCurrentScreen('upload_data')}
+          className="btn-primary"
+          style={{ height: '40px', padding: '0 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 700 }}
+        >
+          Go to Upload Data
+        </button>
+      </div>
+    );
+  }
 
   const handleSave = () => {
     addContacts(records);
-    showToast(`Saved ${records.length} validated records to ${currentPeriod.departmentOrClass}`);
+    showToast(`Saved ${records.length} validated records to ${currentPeriod ? currentPeriod.departmentOrClass : 'Dataset'}`);
     setCurrentScreen('student_list');
   };
 

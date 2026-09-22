@@ -17,7 +17,7 @@ export const ReadyToCallScreen: React.FC = () => {
   };
 
   const selectedCount = selectedContactIds.length;
-  const callerName = currentUser?.name || currentPeriod.assignedCallerName || 'Mr. Kumar';
+  const callerName = currentUser?.name || (currentPeriod ? currentPeriod.assignedCallerName : 'Admin');
 
   return (
     <div
@@ -96,7 +96,7 @@ export const ReadyToCallScreen: React.FC = () => {
             <div style={{ marginBottom: '10px' }}>
               <span style={{ fontSize: '11px', color: '#64748B', display: 'block' }}>Class / Department:</span>
               <strong style={{ fontSize: '13px', color: '#1E293B' }}>
-                {currentPeriod.departmentOrClass} ({currentPeriod.year})
+                {currentPeriod ? `${currentPeriod.departmentOrClass} (${currentPeriod.year})` : 'General'}
               </strong>
             </div>
 

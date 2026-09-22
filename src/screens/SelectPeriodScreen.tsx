@@ -5,14 +5,16 @@ import { ChevronLeft, ChevronDown, User, Calendar, Database } from 'lucide-react
 export const SelectPeriodScreen: React.FC = () => {
   const { periods, currentPeriod, setCurrentPeriod, setCurrentScreen, showToast, currentTemplate } = useApp();
 
-  const [selectedPeriodId, setSelectedPeriodId] = useState(currentPeriod.id);
+  const [selectedPeriodId, setSelectedPeriodId] = useState(currentPeriod ? currentPeriod.id : '');
 
   const activePeriods = periods.filter(p => !p.isArchived);
-  const selectedPeriod = periods.find(p => p.id === selectedPeriodId) || periods[0];
+  const selectedPeriod = periods.find(p => p.id === selectedPeriodId) || activePeriods[0] || null;
 
   const handleLoadData = () => {
-    setCurrentPeriod(selectedPeriod);
-    showToast(`Loaded ${selectedPeriod.departmentOrClass} (${selectedPeriod.year} • ${selectedPeriod.semesterOrPeriod})`);
+    if (selectedPeriod) {
+      setCurrentPeriod(selectedPeriod);
+      showToast(`Loaded ${selectedPeriod.departmentOrClass} (${selectedPeriod.year} • ${selectedPeriod.semesterOrPeriod})`);
+    }
     setCurrentScreen('student_list');
   };
 
