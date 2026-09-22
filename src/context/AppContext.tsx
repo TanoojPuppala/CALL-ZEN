@@ -28,6 +28,16 @@ import {
   SEED_CALL_REPORTS,
   SEED_AUDIT_LOGS
 } from '../data/seedData';
+import {
+  isSupabaseConfigured,
+  fetchContactsFromSupabase,
+  syncContactsToSupabase,
+  deleteContactFromSupabase,
+  saveCallLogToSupabase,
+  saveAuditLogToSupabase,
+  fetchPeriodsFromSupabase,
+  fetchCallLogsFromSupabase
+} from '../services/supabase';
 import confetti from 'canvas-confetti';
 
 interface AnalyticsSummary {
@@ -183,6 +193,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isVoiceAssistantOpen, setIsVoiceAssistantOpen] = useState<boolean>(false);
 
+  // Load Supabase records if configured
+  React.useEffect(() => {
+    if (isSupabaseConfigured) {
+      (async () => {
+        const fetchedContacts = await fetchContactsFromSupabase();
+        if (fetchedContacts && fetchedContacts.length > 0) {
+          setContacts(fetchedContacts);
+        }
+        const fetchedPeriods = await fetchPeriodsFromSupabase();
+        if (fetchedPeriods && fetchedPeriods.length > 0) {
+          setPeriods(fetchedPeriods);
+        }
+        const fetchedCallLogs = await fetchCallLogsFromSupabase();
+        if (fetchedCallLogs && fetchedCallLogs.length > 0) {
+          setCallReports(fetchedCallLogs);
+        }
+      })();
+    }
+  }, []);
+
   const currentTemplate = INDUSTRY_TEMPLATES[currentIndustry] || INDUSTRY_TEMPLATES.education;
 
   const setCurrentScreen = (screen: ScreenType) => {
@@ -198,15 +228,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logAuditEvent = (action: string, details: string) => {
+    const actorName = currentUser ? currentUser.name : 'System Admin';
+    const actorRole = currentUser ? currentUser.role : 'org_admin';
     const newLog: AuditLog = {
       id: `log-${Date.now()}`,
       organizationId: currentOrg.id,
-      actorName: currentUser ? currentUser.name : 'System Admin',
+      actorName,
       action,
       details,
       timestamp: new Date().toISOString()
     };
     setAuditLogs(prev => [newLog, ...prev]);
+    if (isSupabaseConfigured) {
+      saveAuditLogToSupabase(actorName, actorRole, action, details);
+    }
   };
 
   // Industry Template Switcher (Sections 51 & 52)
@@ -322,12 +357,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const addContacts = (newContacts: Contact[]) => {
     setContacts(prev => [...newContacts, ...prev]);
+    if (isSupabaseConfigured) {
+      syncContactsToSupabase(newContacts);
+    }
     logAuditEvent('DATA_UPLOAD', `Imported ${newContacts.length} new records`);
     showToast(`Imported ${newContacts.length} contacts successfully`);
   };
 
   const updateContact = (updated: Contact) => {
     setContacts(prev => prev.map(c => (c.id === updated.id ? updated : c)));
+    if (isSupabaseConfigured) {
+      syncContactsToSupabase([updated]);
+    }
     showToast(`Updated ${updated.name}`);
   };
 
@@ -335,6 +376,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const contact = contacts.find(c => c.id === id);
     setContacts(prev => prev.filter(c => c.id !== id));
     setSelectedContactIds(prev => prev.filter(selectedId => selectedId !== id));
+    if (isSupabaseConfigured) {
+      deleteContactFromSupabase(id);
+    }
     logAuditEvent('DATA_DELETE', `Deleted contact ${contact?.name || id}`);
     showToast(`Deleted contact`);
   };
@@ -487,6 +531,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setCallReports(prev => [fullReport, ...prev]);
+    if (isSupabaseConfigured) {
+      saveCallLogToSupabase(fullReport);
+    }
 
     // PRD INVARIANT: Unreachable contacts enter retry queue, NOT completed!
     const isUnreachable = ['no_answer', 'busy', 'switched_off', 'callback_required'].includes(fullReport.outcome);
