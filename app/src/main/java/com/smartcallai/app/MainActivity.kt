@@ -6,7 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -14,6 +14,9 @@ import androidx.navigation.compose.rememberNavController
 import com.smartcallai.app.data.local.AppDatabase
 import com.smartcallai.app.data.repository.SmartCallRepositoryImpl
 import com.smartcallai.app.ui.MainViewModel
+import com.smartcallai.app.ui.auth.AuthScreen
+import com.smartcallai.app.ui.auth.AuthState
+import com.smartcallai.app.ui.auth.AuthViewModel
 import com.smartcallai.app.ui.calling.CallingViewModel
 import com.smartcallai.app.ui.dashboard.DashboardScreen
 import com.smartcallai.app.ui.data.DataManagementScreen
@@ -42,17 +45,28 @@ class MainActivity : ComponentActivity() {
         val leaveViewModel = LeaveViewModel(repository)
         val reportsViewModel = ReportsViewModel(repository)
         val voiceViewModel = VoiceAssistantViewModel(repository)
+        val authViewModel = AuthViewModel(repository, applicationContext)
 
         setContent {
             SmartCallAiTheme {
-                SmartCallAppContent(
-                    mainViewModel = mainViewModel,
-                    dataViewModel = dataViewModel,
-                    callingViewModel = callingViewModel,
-                    leaveViewModel = leaveViewModel,
-                    reportsViewModel = reportsViewModel,
-                    voiceViewModel = voiceViewModel
-                )
+                val authState by authViewModel.authState.collectAsState()
+
+                if (authState is AuthState.Success) {
+                    SmartCallAppContent(
+                        mainViewModel = mainViewModel,
+                        dataViewModel = dataViewModel,
+                        callingViewModel = callingViewModel,
+                        leaveViewModel = leaveViewModel,
+                        reportsViewModel = reportsViewModel,
+                        voiceViewModel = voiceViewModel,
+                        authViewModel = authViewModel
+                    )
+                } else {
+                    AuthScreen(
+                        viewModel = authViewModel,
+                        onAuthSuccess = { }
+                    )
+                }
             }
         }
     }
@@ -65,7 +79,8 @@ fun SmartCallAppContent(
     callingViewModel: CallingViewModel,
     leaveViewModel: LeaveViewModel,
     reportsViewModel: ReportsViewModel,
-    voiceViewModel: VoiceAssistantViewModel
+    voiceViewModel: VoiceAssistantViewModel,
+    authViewModel: AuthViewModel
 ) {
     val navController = rememberNavController()
 
@@ -100,7 +115,6 @@ fun SmartCallAppContent(
                 }
             }
 
-            // Floating Voice Assistant
             VoiceAssistantOverlay(viewModel = voiceViewModel)
         }
     }

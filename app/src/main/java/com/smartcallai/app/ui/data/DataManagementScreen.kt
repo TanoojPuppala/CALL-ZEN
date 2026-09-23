@@ -1,5 +1,9 @@
 package com.smartcallai.app.ui.data
 
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -24,7 +28,6 @@ import androidx.navigation.NavController
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.ui.calling.CallingViewModel
 import com.smartcallai.app.ui.components.*
-import com.smartcallai.app.ui.navigation.Screen
 import com.smartcallai.app.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -326,7 +329,7 @@ fun DataManagementScreen(
             }
         }
 
-        // Ready-to-Call & Direct Dialing Modal (NO Intermediate Calling Screen)
+        // Ready-to-Call & Direct Dialing Modal
         if (showReadyToCallModal) {
             AlertDialog(
                 onDismissRequest = { showReadyToCallModal = false },
@@ -385,7 +388,6 @@ fun DataManagementScreen(
                                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
                                             Button(
                                                 onClick = {
-                                                    // Direct Dial Action: Creates session & launches ACTION_DIAL
                                                     if (activeSession == null) {
                                                         callingViewModel.startCallingSession("current_period", selectedContacts)
                                                     }
@@ -414,7 +416,7 @@ fun DataManagementScreen(
                                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                                                     modifier = Modifier.weight(1f)
                                                 ) {
-                                                    Icon(Icons.Default.PhoneForwarded, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                    Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
                                                     Spacer(modifier = Modifier.width(4.dp))
                                                     Text(text = "Call Alt\n${contact.alternatePhone}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
                                                 }
@@ -455,7 +457,7 @@ fun DataManagementScreen(
             )
         }
 
-        // Post-Call Report Review Dialog (Displays when returning from Dialer)
+        // Post-Call Report Review Dialog
         if (pendingReport != null) {
             AlertDialog(
                 onDismissRequest = { },
@@ -603,19 +605,47 @@ fun DataManagementScreen(
             )
         }
 
-        // CSV Import Dialog
+        // CSV Import Dialog with Native File Picker Launcher
         if (showImportDialog) {
             var rawCsvText by remember { mutableStateOf("") }
 
+            val filePickerLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.GetContent()
+            ) { uri: Uri? ->
+                if (uri != null) {
+                    try {
+                        val inputStream = context.contentResolver.openInputStream(uri)
+                        val text = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                        rawCsvText = text
+                        dataViewModel.parseRawCsvInput(rawCsvText)
+                        Toast.makeText(context, "CSV File Loaded!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Failed to read CSV: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+
             AlertDialog(
                 onDismissRequest = { showImportDialog = false },
-                title = { Text(text = "Import Contacts (CSV / Text)", fontWeight = FontWeight.Bold) },
+                title = { Text(text = "Import Contacts (CSV File / Text)", fontWeight = FontWeight.Bold) },
                 text = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(text = "Paste CSV or comma-separated lines (Roll/ID, Name, Primary Phone, Alternate Phone, Group):", fontSize = 12.sp)
+                        // Native File Upload Button
+                        Button(
+                            onClick = { filePickerLauncher.launch("*/*") },
+                            colors = ButtonDefaults.buttonColors(containerColor = SoftBlueContainer, contentColor = RoyalBluePrimary),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Choose CSV File from Storage", fontWeight = FontWeight.Bold)
+                        }
+
+                        Text(text = "Or paste CSV / comma-separated text manually:", fontSize = 12.sp, color = TextSecondary)
 
                         OutlinedTextField(
                             value = rawCsvText,
@@ -626,7 +656,7 @@ fun DataManagementScreen(
                             placeholder = { Text("101, Aarav Kumar, +91 9810111111, +91 8710111111, Class 10A") },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(120.dp)
+                                .height(100.dp)
                         )
 
                         if (importPreviewItems.isNotEmpty()) {
@@ -634,7 +664,7 @@ fun DataManagementScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(130.dp)
+                                    .height(110.dp)
                                     .border(1.dp, BorderLight)
                                     .padding(6.dp)
                             ) {
