@@ -7,18 +7,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.smartcallai.app.data.local.UserSessionManager
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.ui.MainViewModel
 import com.smartcallai.app.ui.auth.AuthViewModel
@@ -32,7 +32,6 @@ fun ProfileScreen(
     viewModel: MainViewModel,
     authViewModel: AuthViewModel
 ) {
-    val context = LocalContext.current
     val org by viewModel.currentOrg.collectAsState()
     val user by viewModel.currentUser.collectAsState()
     val config by viewModel.industryConfig.collectAsState()
@@ -43,6 +42,11 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 title = { Text(text = "Profile & Organization", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = CardSurface)
             )
@@ -121,7 +125,7 @@ fun ProfileScreen(
                                 .fillMaxWidth()
                                 .height(48.dp)
                         ) {
-                            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(text = "Sign Out", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }

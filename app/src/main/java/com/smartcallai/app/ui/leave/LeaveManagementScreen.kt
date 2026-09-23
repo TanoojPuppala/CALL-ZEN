@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,6 +49,11 @@ fun LeaveManagementScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 title = { Text(text = "Leave Management & Sanctions", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 actions = {
                     Button(
@@ -143,7 +149,13 @@ fun LeaveManagementScreen(
                                         Text(text = contact?.name ?: "Contact #${leave.contactId}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
                                         Text(text = "ID #${contact?.rollOrIdNumber ?: "N/A"} • ${leave.leaveType}", fontSize = 12.sp, color = TextSecondary)
                                     }
-                                    StatusBadge(text = leave.status.displayName)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        StatusBadge(text = leave.status.displayName)
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        IconButton(onClick = { viewModel.deleteLeaveRecord(leave.leaveId) }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Delete Leave", tint = DangerRed, modifier = Modifier.size(18.dp))
+                                        }
+                                    }
                                 }
 
                                 HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = BorderLight)

@@ -10,7 +10,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.smartcallai.app.data.local.AppDatabase
 import com.smartcallai.app.data.repository.SmartCallRepositoryImpl
@@ -30,8 +29,6 @@ import com.smartcallai.app.ui.profile.ProfileScreen
 import com.smartcallai.app.ui.reports.ReportsScreen
 import com.smartcallai.app.ui.reports.ReportsViewModel
 import com.smartcallai.app.ui.theme.SmartCallAiTheme
-import com.smartcallai.app.ui.voice.VoiceAssistantOverlay
-import com.smartcallai.app.ui.voice.VoiceAssistantViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -45,7 +42,6 @@ class MainActivity : ComponentActivity() {
         val callingViewModel = CallingViewModel(repository)
         val leaveViewModel = LeaveViewModel(repository)
         val reportsViewModel = ReportsViewModel(repository)
-        val voiceViewModel = VoiceAssistantViewModel(repository)
         val authViewModel = AuthViewModel(repository, applicationContext)
 
         setContent {
@@ -59,7 +55,6 @@ class MainActivity : ComponentActivity() {
                         callingViewModel = callingViewModel,
                         leaveViewModel = leaveViewModel,
                         reportsViewModel = reportsViewModel,
-                        voiceViewModel = voiceViewModel,
                         authViewModel = authViewModel
                     )
                 } else {
@@ -80,12 +75,9 @@ fun SmartCallAppContent(
     callingViewModel: CallingViewModel,
     leaveViewModel: LeaveViewModel,
     reportsViewModel: ReportsViewModel,
-    voiceViewModel: VoiceAssistantViewModel,
     authViewModel: AuthViewModel
 ) {
     val navController = rememberNavController()
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
         bottomBar = {
@@ -120,11 +112,6 @@ fun SmartCallAppContent(
                 composable(Screen.LeaveManagement.route) {
                     LeaveManagementScreen(navController = navController, viewModel = leaveViewModel)
                 }
-            }
-
-            // Floating Voice Assistant Overlay (Hidden on Data Management screen)
-            if (currentRoute != Screen.DataManagement.route) {
-                VoiceAssistantOverlay(viewModel = voiceViewModel)
             }
         }
     }

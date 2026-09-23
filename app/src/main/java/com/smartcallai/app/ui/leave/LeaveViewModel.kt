@@ -16,8 +16,10 @@ class LeaveViewModel(
     val leaveRecords: StateFlow<List<LeaveRecord>> = repository.getLeaveRecords()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val contacts: StateFlow<List<Contact>> = repository.getCurrentPeriod().flatMapLatest { period ->
-        if (period != null) repository.getContacts(period.periodId) else flowOf(emptyList())
+    private val periodIdFlow = repository.getCurrentPeriod().map { it?.periodId ?: "" }
+
+    val contacts: StateFlow<List<Contact>> = periodIdFlow.flatMapLatest { pId ->
+        if (pId.isNotBlank()) repository.getContacts(pId) else flowOf(emptyList())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun addLeaveRequest(
@@ -27,17 +29,13 @@ class LeaveViewModel(
         endDate: String,
         durationDays: Int,
         reason: String,
-        notes: String,
+        notes: String = "",
         autoApprove: Boolean = true
     ) {
         viewModelScope.launch {
+            val period = repository.getCurrentPeriod().first() ?: return@launch
+            val org = repository.getCurrentOrganization().first() ?: return@launch
             val user = repository.getCurrentUser().first()
-            val org = repository.getCurrentOrganization().first()
-            val period = repository.getCurrentPeriod().first()
-
-            if (org == null || period == null) return@launch
-
-            val requesterName = user?.name ?: "Authorized User"
 
             val leave = LeaveRecord(
                 leaveId = "leave_${System.currentTimeMillis()}",
@@ -51,8 +49,8 @@ class LeaveViewModel(
                 reason = reason,
                 notes = notes,
                 status = if (autoApprove) LeaveStatus.APPROVED else LeaveStatus.PENDING,
-                requestedBy = requesterName,
-                approvedBy = if (autoApprove) requesterName else null,
+                requestedBy = user?.name ?: "Admin",
+                approvedBy = if (autoApprove) user?.name ?: "Admin" else null,
                 approvedAt = if (autoApprove) System.currentTimeMillis() else null
             )
             repository.addLeaveRecord(leave)
@@ -62,30 +60,32 @@ class LeaveViewModel(
     fun approveLeave(leaveId: String) {
         viewModelScope.launch {
             val user = repository.getCurrentUser().first()
-            val approverName = user?.name ?: "Authorized Admin"
-            repository.updateLeaveStatus(leaveId, LeaveStatus.APPROVED, approverName)
+            repository.updateLeaveStatus(leaveId, LeaveStatus.APPROVED, user?.name ?: "Admin")
         }
     }
 
     fun rejectLeave(leaveId: String) {
         viewModelScope.launch {
             val user = repository.getCurrentUser().first()
-            val reviewerName = user?.name ?: "Authorized Admin"
-            repository.updateLeaveStatus(leaveId, LeaveStatus.REJECTED, reviewerName)
+            repository.updateLeaveStatus(leaveId, LeaveStatus.REJECTED, user?.name ?: "Admin")
         }
     }
 
-    fun extendLeave(leaveId: String, newEndDate: String, extraDays: Int) {
+    fun extendLeave(leaveId: String, currentEndDate: String, extraDays: Int) {
         viewModelScope.launch {
-            val leave = leaveRecords.value.find { it.leaveId == leaveId } ?: return@launch
-            val updatedDuration = leave.durationDays + extraDays
-            repository.extendLeave(leaveId, newEndDate, updatedDuration)
+            repository.extendLeave(leaveId, currentEndDate, extraDays)
         }
     }
 
     fun cancelLeave(leaveId: String) {
         viewModelScope.launch {
             repository.cancelLeave(leaveId)
+        }
+    }
+
+    fun deleteLeaveRecord(leaveId: String) {
+        viewModelScope.launch {
+            repository.deleteLeaveRecord(leaveId)
         }
     }
 }

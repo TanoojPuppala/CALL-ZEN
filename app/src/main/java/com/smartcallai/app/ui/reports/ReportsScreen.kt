@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -35,6 +36,11 @@ fun ReportsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 title = { Text(text = "Reports & Analytics", fontWeight = FontWeight.Bold, fontSize = 18.sp) },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = CardSurface)
             )
@@ -140,9 +146,21 @@ fun ReportsScreen(
                 }
             }
 
-            // Audit Feed
+            // Audit Feed Header with Delete/Clear History Button
             item {
-                Text(text = "System Audit History", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(text = "System Audit History", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
+
+                    if (auditLogs.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.clearAuditHistory() }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Clear Audit History", tint = DangerRed)
+                        }
+                    }
+                }
             }
 
             if (auditLogs.isEmpty()) {
@@ -150,7 +168,7 @@ fun ReportsScreen(
                     Text(text = "No audit log entries recorded yet.", fontSize = 12.sp, color = TextMuted)
                 }
             } else {
-                items(auditLogs.take(10)) { audit ->
+                items(auditLogs.take(15)) { audit ->
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = CardSurface),

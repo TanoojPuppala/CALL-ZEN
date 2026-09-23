@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -70,6 +71,11 @@ fun DataManagementScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
                 title = {
                     Column {
                         Text(text = "Data Management", fontWeight = FontWeight.Bold, fontSize = 18.sp)
@@ -143,9 +149,13 @@ fun DataManagementScreen(
                                 Text(text = "Delete", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             }
 
+                            // CALL NOW Button
                             PrimaryButton(
-                                text = "Ready to Call",
-                                onClick = { showReadyToCallModal = true },
+                                text = "CALL NOW",
+                                onClick = {
+                                    dataViewModel.markSelectedAsAbsent()
+                                    showReadyToCallModal = true
+                                },
                                 icon = Icons.Default.Call
                             )
                         }
@@ -252,15 +262,25 @@ fun DataManagementScreen(
                         .border(1.dp, BorderLight, RoundedCornerShape(12.dp))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Checkbox(
-                            checked = allSelected,
-                            onCheckedChange = { dataViewModel.selectAll(it) },
-                            colors = CheckboxDefaults.colors(checkedColor = RoyalBluePrimary)
-                        )
-                        Text(text = "Select All (${contacts.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = allSelected,
+                                onCheckedChange = { dataViewModel.selectAll(it) },
+                                colors = CheckboxDefaults.colors(checkedColor = RoyalBluePrimary)
+                            )
+                            Text(text = "Select All (${contacts.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        }
+
+                        // Wipe All Contacts Button
+                        TextButton(onClick = { dataViewModel.deleteAllContacts() }) {
+                            Text(text = "Clear All", color = DangerRed, fontSize = 12.sp)
+                        }
                     }
                 }
 

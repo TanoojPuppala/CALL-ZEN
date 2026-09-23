@@ -76,6 +76,13 @@ class DataViewModel(
         }
     }
 
+    fun markSelectedAsAbsent() {
+        viewModelScope.launch {
+            val selectedIds = selectedContacts.value.map { it.contactId }
+            repository.markContactsAsAbsent(selectedIds)
+        }
+    }
+
     fun addManualContact(
         name: String,
         rollOrId: String,
@@ -161,6 +168,12 @@ class DataViewModel(
             selected.forEach { contact ->
                 repository.deleteContact(contact.contactId)
             }
+        }
+    }
+
+    fun deleteAllContacts() {
+        viewModelScope.launch {
+            repository.deleteAllContacts()
         }
     }
 

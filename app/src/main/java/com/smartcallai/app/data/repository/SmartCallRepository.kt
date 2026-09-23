@@ -43,8 +43,10 @@ interface SmartCallRepository {
     suspend fun addContact(contact: Contact)
     suspend fun updateContactSelection(contactId: String, isSelected: Boolean)
     suspend fun selectAllContacts(periodId: String, isSelected: Boolean)
+    suspend fun markContactsAsAbsent(contactIds: List<String>)
     suspend fun importContacts(contacts: List<Contact>)
     suspend fun deleteContact(contactId: String)
+    suspend fun deleteAllContacts()
 
     fun getLeaveRecords(): Flow<List<LeaveRecord>>
     fun getLeaveRecordsForContact(contactId: String): Flow<List<LeaveRecord>>
@@ -52,6 +54,7 @@ interface SmartCallRepository {
     suspend fun updateLeaveStatus(leaveId: String, status: LeaveStatus, approvedBy: String?)
     suspend fun extendLeave(leaveId: String, newEndDate: String, newDurationDays: Int)
     suspend fun cancelLeave(leaveId: String)
+    suspend fun deleteLeaveRecord(leaveId: String)
     suspend fun isContactCoveredByApprovedLeave(contactId: String, dateStr: String): Boolean
 
     suspend fun createCallingSession(periodId: String, selectedContacts: List<Contact>): CallingSession
@@ -73,6 +76,7 @@ interface SmartCallRepository {
 
     fun getAuditLogs(): Flow<List<AuditLog>>
     suspend fun addAuditLog(action: String, entityType: String, entityId: String, details: String)
+    suspend fun clearAuditLogs()
 
     fun getAnalyticsSummary(periodId: String): Flow<AnalyticsSummary>
 
@@ -89,7 +93,6 @@ class SmartCallRepositoryImpl(
     private val activeUserIdState = MutableStateFlow<String?>(null)
 
     init {
-        // Seed default Industry Configs in Room if empty
         GlobalScope.launch {
             try {
                 if (db.industryConfigDao().countIndustryConfigs() == 0) {
@@ -157,13 +160,14 @@ class SmartCallRepositoryImpl(
         email: String,
         rawPassword: String
     ): Organization {
-        val orgId = "org_${email.lowercase().replace("@", "_").replace(".", "_")}"
+        val cleanEmail = email.trim().lowercase(Locale.ROOT)
+        val orgId = "org_${cleanEmail.replace("@", "_").replace(".", "_")}"
         val orgEntity = OrganizationEntity(orgId, orgName, industryType, orgCode)
         db.organizationDao().insertOrganization(orgEntity)
 
-        val userId = "user_${email.lowercase().replace("@", "_").replace(".", "_")}"
+        val userId = "user_${cleanEmail.replace("@", "_").replace(".", "_")}"
         val passHash = SecurityUtils.hashPassword(rawPassword)
-        val userEntity = UserEntity(userId, adminName, email, passHash, UserRole.ORG_ADMIN, orgId)
+        val userEntity = UserEntity(userId, adminName, cleanEmail, passHash, UserRole.ORG_ADMIN, orgId)
         db.userDao().insertUser(userEntity)
 
         val defaultPeriodId = "period_${orgId}"
@@ -180,7 +184,7 @@ class SmartCallRepositoryImpl(
         activeUserIdState.value = userId
 
         val org = Organization(orgId, orgName, industryType, orgCode)
-        val user = User(userId, adminName, email, UserRole.ORG_ADMIN, orgId)
+        val user = User(userId, adminName, cleanEmail, UserRole.ORG_ADMIN, orgId)
         val period = Period(defaultPeriodId, orgId, periodEntity.name, periodEntity.startDate, periodEntity.endDate, true)
 
         GlobalScope.launch {
@@ -211,7 +215,8 @@ class SmartCallRepositoryImpl(
     }
 
     override suspend fun findUserByEmail(email: String): User? {
-        val entity = db.userDao().getUserByEmail(email) ?: return null
+        val cleanEmail = email.trim().lowercase(Locale.ROOT)
+        val entity = db.userDao().getUserByEmail(cleanEmail) ?: return null
         return User(entity.userId, entity.name, entity.email, entity.role, entity.organizationId)
     }
 
@@ -342,6 +347,13 @@ class SmartCallRepositoryImpl(
         db.contactDao().updateAllSelectionForPeriod(periodId, isSelected)
     }
 
+    override suspend fun markContactsAsAbsent(contactIds: List<String>) {
+        contactIds.forEach { id ->
+            db.contactDao().updateContactStatus(id, "Absent")
+            addAuditLog("MARK_ABSENT", "Contact", id, "Marked contact $id as Absent")
+        }
+    }
+
     override suspend fun importContacts(contacts: List<Contact>) {
         val entities = contacts.map {
             ContactEntity(
@@ -364,6 +376,16 @@ class SmartCallRepositoryImpl(
             supabaseService.deleteContact(contactId)
         }
         addAuditLog("DELETE_CONTACT", "Contact", contactId, "Deleted contact $contactId")
+    }
+
+    override suspend fun deleteAllContacts() {
+        val activePeriod = getCurrentPeriod().first()
+        if (activePeriod != null) {
+            db.contactDao().deleteContactsForPeriod(activePeriod.periodId)
+        } else {
+            db.contactDao().deleteAllContacts()
+        }
+        addAuditLog("DELETE_ALL_CONTACTS", "Contact", "all", "Cleared all contacts")
     }
 
     override fun getLeaveRecords(): Flow<List<LeaveRecord>> {
@@ -423,6 +445,11 @@ class SmartCallRepositoryImpl(
         val now = System.currentTimeMillis()
         db.leaveRecordDao().cancelLeave(leaveId, now)
         addAuditLog("CANCEL_LEAVE", "LeaveRecord", leaveId, "Cancelled leave")
+    }
+
+    override suspend fun deleteLeaveRecord(leaveId: String) {
+        db.leaveRecordDao().deleteLeaveRecord(leaveId)
+        addAuditLog("DELETE_LEAVE", "LeaveRecord", leaveId, "Deleted leave record $leaveId")
     }
 
     override suspend fun isContactCoveredByApprovedLeave(contactId: String, dateStr: String): Boolean {
@@ -672,6 +699,10 @@ class SmartCallRepositoryImpl(
                 timestamp = System.currentTimeMillis()
             )
         )
+    }
+
+    override suspend fun clearAuditLogs() {
+        db.auditLogDao().clearAuditLogs()
     }
 
     override fun getAnalyticsSummary(periodId: String): Flow<AnalyticsSummary> {

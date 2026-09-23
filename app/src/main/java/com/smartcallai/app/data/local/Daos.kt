@@ -76,8 +76,14 @@ interface ContactDao {
     @Query("UPDATE contacts SET isSelected = :isSelected WHERE periodId = :periodId")
     suspend fun updateAllSelectionForPeriod(periodId: String, isSelected: Boolean)
 
+    @Query("UPDATE contacts SET currentStatus = :status WHERE contactId = :contactId")
+    suspend fun updateContactStatus(contactId: String, status: String)
+
     @Query("DELETE FROM contacts WHERE contactId = :contactId")
     suspend fun deleteContact(contactId: String)
+
+    @Query("DELETE FROM contacts WHERE periodId = :periodId")
+    suspend fun deleteContactsForPeriod(periodId: String)
 
     @Query("DELETE FROM contacts")
     suspend fun deleteAllContacts()
@@ -105,6 +111,9 @@ interface LeaveRecordDao {
 
     @Query("UPDATE leave_records SET status = 'CANCELLED', cancelledAt = :cancelledAt, updatedAt = :cancelledAt WHERE leaveId = :leaveId")
     suspend fun cancelLeave(leaveId: String, cancelledAt: Long)
+
+    @Query("DELETE FROM leave_records WHERE leaveId = :leaveId")
+    suspend fun deleteLeaveRecord(leaveId: String)
 }
 
 @Dao
@@ -186,4 +195,7 @@ interface AuditLogDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAuditLog(audit: AuditLogEntity)
+
+    @Query("DELETE FROM audit_logs")
+    suspend fun clearAuditLogs()
 }
