@@ -1,5 +1,6 @@
 package com.smartcallai.app.ui.profile
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -13,10 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
+import com.smartcallai.app.data.remote.SupabaseConfig
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.ui.MainViewModel
 import com.smartcallai.app.ui.components.*
@@ -28,9 +32,11 @@ fun ProfileScreen(
     navController: NavController,
     viewModel: MainViewModel
 ) {
+    val context = LocalContext.current
     val org by viewModel.currentOrg.collectAsState()
     val user by viewModel.currentUser.collectAsState()
     val config by viewModel.industryConfig.collectAsState()
+    val supabaseConnected by viewModel.supabaseConnected.collectAsState()
 
     var showIndustryDialog by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
@@ -101,6 +107,55 @@ fun ProfileScreen(
                                     Text(text = "Switch Industry", fontSize = 12.sp)
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            // Supabase Database Connection Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, BorderLight, RoundedCornerShape(18.dp))
+                ) {
+                    Column(modifier = Modifier.padding(20.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.CloudSync, contentDescription = null, tint = RoyalBluePrimary)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "Supabase Database Sync", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
+                            }
+
+                            if (supabaseConnected == true) {
+                                StatusBadge(text = "Connected")
+                            } else if (supabaseConnected == false) {
+                                StatusBadge(text = "Offline Mode")
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(text = "Endpoint: ${SupabaseConfig.SUPABASE_URL}", fontSize = 12.sp, color = TextSecondary)
+                        Text(text = "Sync Mode: Offline-First Room DB with Supabase Cloud Sync", fontSize = 11.sp, color = TextMuted)
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Button(
+                            onClick = {
+                                viewModel.testSupabaseConnection()
+                                Toast.makeText(context, "Testing Supabase API Connection...", Toast.LENGTH_SHORT).show()
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "Test Connection & Sync", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }

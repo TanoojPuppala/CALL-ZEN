@@ -153,7 +153,7 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Button(
-                                    onClick = { navController.navigate(Screen.Calling.route) },
+                                    onClick = { navController.navigate(Screen.DataManagement.route) },
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color.White,
                                         contentColor = RoyalBluePrimary

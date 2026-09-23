@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,7 +14,6 @@ import androidx.navigation.compose.rememberNavController
 import com.smartcallai.app.data.local.AppDatabase
 import com.smartcallai.app.data.repository.SmartCallRepositoryImpl
 import com.smartcallai.app.ui.MainViewModel
-import com.smartcallai.app.ui.calling.CallingScreen
 import com.smartcallai.app.ui.calling.CallingViewModel
 import com.smartcallai.app.ui.dashboard.DashboardScreen
 import com.smartcallai.app.ui.data.DataManagementScreen
@@ -85,13 +83,10 @@ fun SmartCallAppContent(
                     DashboardScreen(navController = navController, viewModel = mainViewModel)
                 }
                 composable(Screen.DataManagement.route) {
-                    DataManagementScreen(navController = navController, viewModel = dataViewModel)
-                }
-                composable(Screen.Calling.route) {
-                    CallingScreen(
+                    DataManagementScreen(
                         navController = navController,
-                        callingViewModel = callingViewModel,
-                        dataViewModel = dataViewModel
+                        dataViewModel = dataViewModel,
+                        callingViewModel = callingViewModel
                     )
                 }
                 composable(Screen.Reports.route) {

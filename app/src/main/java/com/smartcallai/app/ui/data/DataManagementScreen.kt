@@ -16,11 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.smartcallai.app.domain.model.*
+import com.smartcallai.app.ui.calling.CallingViewModel
 import com.smartcallai.app.ui.components.*
 import com.smartcallai.app.ui.navigation.Screen
 import com.smartcallai.app.ui.theme.*
@@ -29,19 +31,37 @@ import com.smartcallai.app.ui.theme.*
 @Composable
 fun DataManagementScreen(
     navController: NavController,
-    viewModel: DataViewModel
+    dataViewModel: DataViewModel,
+    callingViewModel: CallingViewModel
 ) {
-    val contacts by viewModel.contacts.collectAsState()
-    val selectedContacts by viewModel.selectedContacts.collectAsState()
-    val searchQuery by viewModel.searchQuery.collectAsState()
-    val statusFilter by viewModel.statusFilter.collectAsState()
-    val importPreviewItems by viewModel.importPreviewItems.collectAsState()
-    val leaveRecords by viewModel.leaveRecords.collectAsState()
+    val context = LocalContext.current
+    val contacts by dataViewModel.contacts.collectAsState()
+    val selectedContacts by dataViewModel.selectedContacts.collectAsState()
+    val searchQuery by dataViewModel.searchQuery.collectAsState()
+    val statusFilter by dataViewModel.statusFilter.collectAsState()
+    val importPreviewItems by dataViewModel.importPreviewItems.collectAsState()
+    val leaveRecords by dataViewModel.leaveRecords.collectAsState()
+
+    val activeSession by callingViewModel.activeSession.collectAsState()
+    val pendingReport by callingViewModel.pendingReport.collectAsState()
+    val currentContact by callingViewModel.currentContact.collectAsState()
 
     var showImportDialog by remember { mutableStateOf(false) }
     var showAddContactDialog by remember { mutableStateOf(false) }
+    var showReadyToCallModal by remember { mutableStateOf(false) }
 
     val allSelected = contacts.isNotEmpty() && contacts.all { it.isSelected }
+
+    val approvedLeaveContacts = selectedContacts.filter { contact ->
+        leaveRecords.any { leave -> leave.contactId == contact.contactId && leave.status == LeaveStatus.APPROVED }
+    }
+    val eligibleContacts = selectedContacts.filter { contact ->
+        !approvedLeaveContacts.contains(contact)
+    }
+
+    var editReportStatus by remember(pendingReport) { mutableStateOf(pendingReport?.aiStatus ?: CallOutcome.ANSWERED) }
+    var editReportReason by remember(pendingReport) { mutableStateOf(pendingReport?.aiReason ?: "") }
+    var editReportFollowUp by remember(pendingReport) { mutableStateOf(pendingReport?.followUpAction ?: "") }
 
     Scaffold(
         topBar = {
@@ -99,14 +119,8 @@ fun DataManagementScreen(
                                 fontSize = 16.sp,
                                 color = TextPrimary
                             )
-                            val leaveCount = selectedContacts.count { contact ->
-                                leaveRecords.any { leave ->
-                                    leave.contactId == contact.contactId && leave.status == LeaveStatus.APPROVED
-                                }
-                            }
-                            val queueCount = selectedContacts.size - leaveCount
                             Text(
-                                text = "$queueCount Call Queue • $leaveCount On Approved Leave",
+                                text = "${eligibleContacts.size} Call Queue • ${approvedLeaveContacts.size} On Approved Leave",
                                 fontSize = 12.sp,
                                 color = TextSecondary
                             )
@@ -114,7 +128,7 @@ fun DataManagementScreen(
 
                         PrimaryButton(
                             text = "Ready to Call",
-                            onClick = { navController.navigate(Screen.Calling.route) },
+                            onClick = { showReadyToCallModal = true },
                             icon = Icons.Default.Call
                         )
                     }
@@ -133,7 +147,7 @@ fun DataManagementScreen(
             // Search & Filters Row
             OutlinedTextField(
                 value = searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
+                onValueChange = { dataViewModel.setSearchQuery(it) },
                 placeholder = { Text(text = "Search by Name, Roll #, or Phone...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 shape = RoundedCornerShape(12.dp),
@@ -157,7 +171,7 @@ fun DataManagementScreen(
                 ).forEach { (key, label) ->
                     FilterChip(
                         selected = statusFilter == key,
-                        onClick = { viewModel.setStatusFilter(key) },
+                        onClick = { dataViewModel.setStatusFilter(key) },
                         label = { Text(text = label, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = RoyalBluePrimary,
@@ -168,7 +182,6 @@ fun DataManagementScreen(
             }
 
             if (contacts.isEmpty()) {
-                // Real Clean Empty State Card
                 Card(
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -213,7 +226,6 @@ fun DataManagementScreen(
                     }
                 }
             } else {
-                // Select All Header Bar
                 Card(
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -227,14 +239,13 @@ fun DataManagementScreen(
                     ) {
                         Checkbox(
                             checked = allSelected,
-                            onCheckedChange = { viewModel.selectAll(it) },
+                            onCheckedChange = { dataViewModel.selectAll(it) },
                             colors = CheckboxDefaults.colors(checkedColor = RoyalBluePrimary)
                         )
                         Text(text = "Select All (${contacts.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     }
                 }
 
-                // Contact Table (Horizontally Scrollable)
                 val horizontalScrollState = rememberScrollState()
                 Box(
                     modifier = Modifier
@@ -249,7 +260,6 @@ fun DataManagementScreen(
                             .fillMaxSize()
                             .horizontalScroll(horizontalScrollState)
                     ) {
-                        // Table Header
                         item {
                             Row(
                                 modifier = Modifier
@@ -268,7 +278,6 @@ fun DataManagementScreen(
                             HorizontalDivider(color = BorderLight)
                         }
 
-                        // Table Rows
                         items(contacts) { contact ->
                             val activeLeave = leaveRecords.find {
                                 it.contactId == contact.contactId && it.status == LeaveStatus.APPROVED
@@ -284,7 +293,7 @@ fun DataManagementScreen(
                                 Box(modifier = Modifier.width(60.dp)) {
                                     Checkbox(
                                         checked = contact.isSelected,
-                                        onCheckedChange = { viewModel.toggleContactSelection(contact.contactId, it) },
+                                        onCheckedChange = { dataViewModel.toggleContactSelection(contact.contactId, it) },
                                         colors = CheckboxDefaults.colors(checkedColor = RoyalBluePrimary)
                                     )
                                 }
@@ -305,7 +314,7 @@ fun DataManagementScreen(
                                 }
 
                                 Box(modifier = Modifier.width(80.dp)) {
-                                    IconButton(onClick = { viewModel.deleteContact(contact.contactId) }) {
+                                    IconButton(onClick = { dataViewModel.deleteContact(contact.contactId) }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed, modifier = Modifier.size(18.dp))
                                     }
                                 }
@@ -315,6 +324,199 @@ fun DataManagementScreen(
                     }
                 }
             }
+        }
+
+        // Ready-to-Call & Direct Dialing Modal (NO Intermediate Calling Screen)
+        if (showReadyToCallModal) {
+            AlertDialog(
+                onDismissRequest = { showReadyToCallModal = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Call, contentDescription = null, tint = RoyalBluePrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Ready to Call Review", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.SpaceAround,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(SoftBlueContainer)
+                                .padding(10.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "${selectedContacts.size}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = RoyalBluePrimary)
+                                Text(text = "Selected", fontSize = 11.sp, color = TextSecondary)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "${approvedLeaveContacts.size}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF0284C7))
+                                Text(text = "Approved Leave", fontSize = 11.sp, color = TextSecondary)
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(text = "${eligibleContacts.size}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = SuccessGreen)
+                                Text(text = "Call Queue", fontSize = 11.sp, color = TextSecondary)
+                            }
+                        }
+
+                        Text(text = "Tap Primary or Alternate to Dial Directly:", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+
+                        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            items(eligibleContacts) { contact ->
+                                Card(
+                                    shape = RoundedCornerShape(10.dp),
+                                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .border(1.dp, BorderLight, RoundedCornerShape(10.dp))
+                                ) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
+                                        Text(text = contact.name, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                        Text(text = "ID #${contact.rollOrIdNumber} • ${contact.groupName}", fontSize = 11.sp, color = TextMuted)
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                            Button(
+                                                onClick = {
+                                                    // Direct Dial Action: Creates session & launches ACTION_DIAL
+                                                    if (activeSession == null) {
+                                                        callingViewModel.startCallingSession("current_period", selectedContacts)
+                                                    }
+                                                    callingViewModel.dialCurrentContact(context, contact, NumberUsedType.PRIMARY)
+                                                    showReadyToCallModal = false
+                                                },
+                                                colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary),
+                                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(text = "Call Primary\n${contact.primaryPhone}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            if (contact.alternatePhone.isNotBlank()) {
+                                                Button(
+                                                    onClick = {
+                                                        if (activeSession == null) {
+                                                            callingViewModel.startCallingSession("current_period", selectedContacts)
+                                                        }
+                                                        callingViewModel.dialCurrentContact(context, contact, NumberUsedType.ALTERNATE)
+                                                        showReadyToCallModal = false
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = SoftBlueContainer, contentColor = RoyalBluePrimary),
+                                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                                                    modifier = Modifier.weight(1f)
+                                                ) {
+                                                    Icon(Icons.Default.PhoneForwarded, contentDescription = null, modifier = Modifier.size(14.dp))
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text(text = "Call Alt\n${contact.alternatePhone}", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (approvedLeaveContacts.isNotEmpty()) {
+                                item {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(text = "On Approved Leave (Excluded from Dialing):", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = Color(0xFF0284C7))
+                                }
+                                items(approvedLeaveContacts) { contact ->
+                                    val leave = leaveRecords.find { it.contactId == contact.contactId && it.status == LeaveStatus.APPROVED }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(Color(0xFFF0F9FF))
+                                            .padding(8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(text = "${contact.name} (${leave?.startDate?.takeLast(5)})", fontSize = 12.sp, color = TextPrimary)
+                                        StatusBadge(text = "Approved Leave")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showReadyToCallModal = false }) {
+                        Text(text = "Close")
+                    }
+                }
+            )
+        }
+
+        // Post-Call Report Review Dialog (Displays when returning from Dialer)
+        if (pendingReport != null) {
+            AlertDialog(
+                onDismissRequest = { },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AiPurple)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Post-Call Report Review", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    }
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(text = "Review and edit call details for ${currentContact?.name ?: "Contact"}:", fontSize = 12.sp, color = TextSecondary)
+
+                        Text(text = "Status:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf(CallOutcome.ANSWERED, CallOutcome.NO_ANSWER, CallOutcome.BUSY, CallOutcome.SWITCHED_OFF).forEach { outcome ->
+                                FilterChip(
+                                    selected = editReportStatus == outcome,
+                                    onClick = {
+                                        editReportStatus = outcome
+                                        callingViewModel.updatePendingReport(editReportStatus, editReportReason, editReportFollowUp)
+                                    },
+                                    label = { Text(text = outcome.displayName, fontSize = 11.sp) }
+                                )
+                            }
+                        }
+
+                        Text(text = "Reason / Notes:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = editReportReason,
+                            onValueChange = {
+                                editReportReason = it
+                                callingViewModel.updatePendingReport(editReportStatus, editReportReason, editReportFollowUp)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Text(text = "Follow-up Action:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        OutlinedTextField(
+                            value = editReportFollowUp,
+                            onValueChange = {
+                                editReportFollowUp = it
+                                callingViewModel.updatePendingReport(editReportStatus, editReportReason, editReportFollowUp)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            callingViewModel.confirmReportAndProceedNext()
+                            showReadyToCallModal = true
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary)
+                    ) {
+                        Text(text = "Confirm & Next Contact")
+                    }
+                }
+            )
         }
 
         // Manual Add Contact Dialog
@@ -336,7 +538,7 @@ fun DataManagementScreen(
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
-                            placeholder = { Text("Full Name (e.g. Aarav Kumar)") },
+                            placeholder = { Text("Full Name") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -344,7 +546,7 @@ fun DataManagementScreen(
                         OutlinedTextField(
                             value = rollOrId,
                             onValueChange = { rollOrId = it },
-                            placeholder = { Text("Roll Number / ID (e.g. 101)") },
+                            placeholder = { Text("Roll Number / ID") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -352,7 +554,7 @@ fun DataManagementScreen(
                         OutlinedTextField(
                             value = primaryPhone,
                             onValueChange = { primaryPhone = it },
-                            placeholder = { Text("Primary Phone (e.g. +91 9810111111)") },
+                            placeholder = { Text("Primary Phone") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -368,7 +570,7 @@ fun DataManagementScreen(
                         OutlinedTextField(
                             value = groupName,
                             onValueChange = { groupName = it },
-                            placeholder = { Text("Group / Class (e.g. Class 10A)") },
+                            placeholder = { Text("Group / Class") },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -378,7 +580,7 @@ fun DataManagementScreen(
                     Button(
                         onClick = {
                             if (name.isNotBlank() && primaryPhone.isNotBlank()) {
-                                viewModel.addManualContact(
+                                dataViewModel.addManualContact(
                                     name = name,
                                     rollOrId = rollOrId,
                                     primaryPhone = primaryPhone,
@@ -419,9 +621,9 @@ fun DataManagementScreen(
                             value = rawCsvText,
                             onValueChange = {
                                 rawCsvText = it
-                                viewModel.parseRawCsvInput(rawCsvText)
+                                dataViewModel.parseRawCsvInput(rawCsvText)
                             },
-                            placeholder = { Text("101, Aarav Kumar, +91 9810111111, +91 8710111111, Class 10A\n102, Ananya Sharma, +91 9810222222, , Class 10A") },
+                            placeholder = { Text("101, Aarav Kumar, +91 9810111111, +91 8710111111, Class 10A") },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(120.dp)
@@ -451,7 +653,7 @@ fun DataManagementScreen(
                     if (importPreviewItems.any { it.isValid }) {
                         Button(
                             onClick = {
-                                viewModel.confirmImport()
+                                dataViewModel.confirmImport()
                                 showImportDialog = false
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary)
@@ -462,7 +664,7 @@ fun DataManagementScreen(
                 },
                 dismissButton = {
                     TextButton(onClick = {
-                        viewModel.clearImport()
+                        dataViewModel.clearImport()
                         showImportDialog = false
                     }) {
                         Text("Cancel")

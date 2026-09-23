@@ -35,6 +35,20 @@ class MainViewModel(
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
+    private val _supabaseConnected = MutableStateFlow<Boolean?>(null)
+    val supabaseConnected: StateFlow<Boolean?> = _supabaseConnected.asStateFlow()
+
+    init {
+        testSupabaseConnection()
+    }
+
+    fun testSupabaseConnection() {
+        viewModelScope.launch {
+            val result = repository.testSupabaseConnection()
+            _supabaseConnected.value = result
+        }
+    }
+
     fun createOrganizationAndAdmin(
         orgName: String,
         industryType: IndustryType,

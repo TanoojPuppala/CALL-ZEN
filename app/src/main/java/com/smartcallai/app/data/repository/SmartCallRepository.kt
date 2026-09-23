@@ -1,6 +1,7 @@
 package com.smartcallai.app.data.repository
 
 import com.smartcallai.app.data.local.*
+import com.smartcallai.app.data.remote.SupabaseService
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.utils.SecurityUtils
 import kotlinx.coroutines.DelicateCoroutinesApi
@@ -72,11 +73,14 @@ interface SmartCallRepository {
     suspend fun addAuditLog(action: String, entityType: String, entityId: String, details: String)
 
     fun getAnalyticsSummary(periodId: String): Flow<AnalyticsSummary>
+
+    suspend fun testSupabaseConnection(): Boolean
 }
 
 @OptIn(DelicateCoroutinesApi::class)
 class SmartCallRepositoryImpl(
-    private val db: AppDatabase
+    private val db: AppDatabase,
+    private val supabaseService: SupabaseService = SupabaseService()
 ) : SmartCallRepository {
 
     private val activePeriodIdState = MutableStateFlow<String?>(null)
@@ -109,6 +113,10 @@ class SmartCallRepositoryImpl(
         configs.forEach { db.industryConfigDao().insertIndustryConfig(it) }
     }
 
+    override suspend fun testSupabaseConnection(): Boolean {
+        return supabaseService.testConnection()
+    }
+
     override fun getOrganizations(): Flow<List<Organization>> {
         return db.organizationDao().getAllOrganizations().map { list ->
             list.map { Organization(it.organizationId, it.name, it.industryType, it.code) }
@@ -127,6 +135,9 @@ class SmartCallRepositoryImpl(
         db.organizationDao().insertOrganization(
             OrganizationEntity(org.organizationId, org.name, org.industryType, org.code)
         )
+        GlobalScope.launch {
+            supabaseService.syncOrganization(org)
+        }
     }
 
     override suspend fun registerOrganizationAndAdmin(
@@ -158,9 +169,16 @@ class SmartCallRepositoryImpl(
         db.periodDao().insertPeriod(periodEntity)
         activePeriodIdState.value = defaultPeriodId
 
+        val org = Organization(orgId, orgName, industryType, orgCode)
+
+        // Sync to Supabase in background
+        GlobalScope.launch {
+            supabaseService.syncOrganization(org)
+        }
+
         addAuditLog("REGISTER_ORG", "Organization", orgId, "Registered organization '$orgName' and Admin '$adminName'")
 
-        return Organization(orgId, orgName, industryType, orgCode)
+        return org
     }
 
     override fun getCurrentUser(): Flow<User?> {
@@ -277,6 +295,9 @@ class SmartCallRepositoryImpl(
                 contact.isSelected, contact.groupName, contact.notes
             )
         )
+        GlobalScope.launch {
+            supabaseService.syncContact(contact)
+        }
         addAuditLog("ADD_CONTACT", "Contact", contact.contactId, "Added contact '${contact.name}' (${contact.rollOrIdNumber})")
     }
 
@@ -298,6 +319,9 @@ class SmartCallRepositoryImpl(
             )
         }
         db.contactDao().insertContacts(entities)
+        GlobalScope.launch {
+            contacts.forEach { supabaseService.syncContact(it) }
+        }
         addAuditLog("IMPORT_CONTACTS", "Contact", "bulk", "Imported ${contacts.size} contacts into database")
     }
 
@@ -341,6 +365,9 @@ class SmartCallRepositoryImpl(
                 leave.approvedBy, leave.createdAt, leave.updatedAt, leave.approvedAt, leave.cancelledAt
             )
         )
+        GlobalScope.launch {
+            supabaseService.syncLeaveRecord(leave)
+        }
         addAuditLog("ADD_LEAVE", "LeaveRecord", leave.leaveId, "Created leave for contact ${leave.contactId} (${leave.startDate} to ${leave.endDate})")
     }
 
@@ -495,6 +522,10 @@ class SmartCallRepositoryImpl(
                 report.confirmedAt, report.editedByUserId
             )
         )
+
+        GlobalScope.launch {
+            supabaseService.syncCallLog(log)
+        }
 
         if (log.outcomeStatus in listOf(CallOutcome.NO_ANSWER, CallOutcome.BUSY, CallOutcome.SWITCHED_OFF, CallOutcome.CALLBACK_REQUIRED)) {
             val retry = RetryAttempt(
