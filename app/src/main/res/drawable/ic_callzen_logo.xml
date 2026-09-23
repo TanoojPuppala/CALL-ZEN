@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+    <!-- outer C arc -->
+    <path
+        android:fillColor="#007AFF"
+        android:pathData="M64,8 C28.65,8 0,36.65 0,72 C0,107.35 28.65,136 64,136 C88,136 108.5,122.8 119.5,103.5 C112,107 103,109 94,109 C63,109 38,84 38,53 C38,36 48.5,21.2 64,15 C80,8.8 99,12 112,23 C100,13.5 83,8 64,8 Z" />
+    <!-- phone receiver -->
+    <path
+        android:fillColor="#00C6FF"
+        android:pathData="M48,42 C45.8,42 44,43.8 44,46 L44,56 C44,71.5 56.5,84 72,84 L82,84 C84.2,84 86,82.2 86,80 L86,72 C86,69.8 84.2,68 82,68 L74,68 C72.8,68 71.7,68.5 71,69.3 L68.2,72.1 C60.8,68.2 55.8,61.2 53.9,53.8 L56.7,51 C57.5,50.3 58,49.2 58,48 L58,40 C58,37.8 56.2,36 54,36 L48,42 Z" />
+    <!-- soundwave bars -->
+    <path
+        android:fillColor="#8A2BE2"
+        android:pathData="M92,48 h6 v28 h-6 z M102,40 h6 v44 h-6 z M112,52 h6 v20 h-6 z" />
+</vector>

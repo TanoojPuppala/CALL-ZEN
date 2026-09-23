@@ -52,7 +52,7 @@ fun VoiceAssistantOverlay(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = AiPurple)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("SmartCall Voice Assistant", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                        Text("CallZen AI Assistant", fontWeight = FontWeight.Bold, fontSize = 16.sp)
                     }
                 },
                 text = {

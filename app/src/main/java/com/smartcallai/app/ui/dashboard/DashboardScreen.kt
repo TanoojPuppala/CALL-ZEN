@@ -41,18 +41,22 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text(
-                            text = org?.name ?: "SmartCall AI",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = TextPrimary
-                        )
-                        Text(
-                            text = if (org != null) "${org?.industryType?.displayName} • ${period?.name ?: "No active period"}" else "Clean First-Run Database",
-                            fontSize = 12.sp,
-                            color = TextSecondary
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CallZenLogo(size = 36)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = org?.name ?: "CallZen",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary
+                            )
+                            Text(
+                                text = if (org != null) "${org?.industryType?.displayName} • ${period?.name ?: "Current Term"}" else "Connect Smarter. Communicate Better.",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
                     }
                 },
                 actions = {
@@ -107,12 +111,18 @@ fun DashboardScreen(
                     ) {
                         if (org == null) {
                             Text(
-                                text = "Welcome to SmartCall AI",
+                                text = "Welcome to CallZen",
                                 fontSize = 22.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = "Connect Smarter. Communicate Better.",
+                                fontSize = 12.sp,
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
                                 text = "No organization configured yet. Register your organization to start managing contacts, attendance, calling sessions, and sanctions.",
                                 fontSize = 13.sp,
@@ -140,7 +150,7 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = Color.White
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
                                 text = "${org?.name} • ${org?.industryType?.displayName} Calling Workflow",
                                 fontSize = 13.sp,
