@@ -108,7 +108,11 @@ fun SmartCallAppContent(
                     ReportsScreen(navController = navController, viewModel = reportsViewModel)
                 }
                 composable(Screen.Profile.route) {
-                    ProfileScreen(navController = navController, viewModel = mainViewModel)
+                    ProfileScreen(
+                        navController = navController,
+                        viewModel = mainViewModel,
+                        authViewModel = authViewModel
+                    )
                 }
                 composable(Screen.LeaveManagement.route) {
                     LeaveManagementScreen(navController = navController, viewModel = leaveViewModel)

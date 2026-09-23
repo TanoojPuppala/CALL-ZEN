@@ -220,7 +220,7 @@ fun LeaveManagementScreen(
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (contacts.isEmpty()) {
-                            Text(text = "No contacts available in database. Add contacts in Data tab first.", fontSize = 13.sp, color = DangerRed)
+                            Text(text = "No contacts available. Add contacts in Data tab first.", fontSize = 13.sp, color = DangerRed)
                         } else {
                             Text(text = "Select Contact:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
 

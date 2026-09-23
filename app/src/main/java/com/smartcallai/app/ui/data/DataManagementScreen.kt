@@ -72,7 +72,7 @@ fun DataManagementScreen(
                 title = {
                     Column {
                         Text(text = "Data Management", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text(text = "${contacts.size} Total Contacts in DB", fontSize = 12.sp, color = TextSecondary)
+                        Text(text = "${contacts.size} Total Contacts", fontSize = 12.sp, color = TextSecondary)
                     }
                 },
                 actions = {
@@ -129,11 +129,25 @@ fun DataManagementScreen(
                             )
                         }
 
-                        PrimaryButton(
-                            text = "Ready to Call",
-                            onClick = { showReadyToCallModal = true },
-                            icon = Icons.Default.Call
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // Delete Selected Button
+                            Button(
+                                onClick = { dataViewModel.deleteSelectedContacts() },
+                                colors = ButtonDefaults.buttonColors(containerColor = DangerRedContainer, contentColor = DangerRed),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.height(48.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(text = "Delete", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            }
+
+                            PrimaryButton(
+                                text = "Ready to Call",
+                                onClick = { showReadyToCallModal = true },
+                                icon = Icons.Default.Call
+                            )
+                        }
                     }
                 }
             }
@@ -199,10 +213,10 @@ fun DataManagementScreen(
                     ) {
                         Icon(Icons.Default.Storage, contentDescription = null, tint = TextMuted, modifier = Modifier.size(48.dp))
                         Spacer(modifier = Modifier.height(12.dp))
-                        Text(text = "No Contacts in Database", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                        Text(text = "No Contacts Available", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Add contacts manually or import a CSV file to populate your database.",
+                            text = "Add contacts manually or import a CSV file to start calling.",
                             fontSize = 13.sp,
                             color = TextSecondary
                         )
@@ -531,7 +545,7 @@ fun DataManagementScreen(
 
             AlertDialog(
                 onDismissRequest = { showAddContactDialog = false },
-                title = { Text(text = "Add Contact to Database", fontWeight = FontWeight.Bold) },
+                title = { Text(text = "Add Contact", fontWeight = FontWeight.Bold) },
                 text = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -594,7 +608,7 @@ fun DataManagementScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary)
                     ) {
-                        Text("Add to Database")
+                        Text("Save Contact")
                     }
                 },
                 dismissButton = {
@@ -633,7 +647,6 @@ fun DataManagementScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        // Native File Upload Button
                         Button(
                             onClick = { filePickerLauncher.launch("*/*") },
                             colors = ButtonDefaults.buttonColors(containerColor = SoftBlueContainer, contentColor = RoyalBluePrimary),
@@ -688,7 +701,7 @@ fun DataManagementScreen(
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary)
                         ) {
-                            Text("Confirm & Save to DB")
+                            Text("Confirm & Save Contacts")
                         }
                     }
                 },

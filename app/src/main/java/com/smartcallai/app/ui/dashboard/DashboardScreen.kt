@@ -195,10 +195,10 @@ fun DashboardScreen(
                 }
             }
 
-            // Key Database Overview Metrics
+            // Key Overview Metrics
             item {
                 Text(
-                    text = "Live Database Summary",
+                    text = "Live Overview Summary",
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary
@@ -213,7 +213,7 @@ fun DashboardScreen(
                     MetricCard(
                         title = "Total Contacts",
                         value = "${summary?.totalAssigned ?: 0}",
-                        subtitle = if ((summary?.totalAssigned ?: 0) == 0) "No contacts in DB" else "Active in period",
+                        subtitle = if ((summary?.totalAssigned ?: 0) == 0) "No contacts available" else "Active in period",
                         icon = Icons.Default.People,
                         modifier = Modifier.weight(1f)
                     )

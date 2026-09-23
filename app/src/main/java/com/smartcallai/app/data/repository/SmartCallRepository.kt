@@ -170,10 +170,14 @@ class SmartCallRepositoryImpl(
         activePeriodIdState.value = defaultPeriodId
 
         val org = Organization(orgId, orgName, industryType, orgCode)
+        val user = User(userId, adminName, email, UserRole.ORG_ADMIN, orgId)
+        val period = Period(defaultPeriodId, orgId, periodEntity.name, periodEntity.startDate, periodEntity.endDate, true)
 
-        // Sync to Supabase in background
+        // Sync Organization, User Profile, and Period to Supabase
         GlobalScope.launch {
             supabaseService.syncOrganization(org)
+            supabaseService.syncProfile(user)
+            supabaseService.syncPeriod(period)
         }
 
         addAuditLog("REGISTER_ORG", "Organization", orgId, "Registered organization '$orgName' and Admin '$adminName'")
@@ -193,6 +197,9 @@ class SmartCallRepositoryImpl(
         db.userDao().insertUser(
             UserEntity(user.userId, user.name, user.email, "", user.role, user.organizationId)
         )
+        GlobalScope.launch {
+            supabaseService.syncProfile(user)
+        }
     }
 
     override fun getIndustryConfigs(): Flow<List<IndustryConfig>> {
@@ -251,6 +258,9 @@ class SmartCallRepositoryImpl(
         )
         if (period.isCurrent) {
             activePeriodIdState.value = period.periodId
+        }
+        GlobalScope.launch {
+            supabaseService.syncPeriod(period)
         }
         addAuditLog("ADD_PERIOD", "Period", period.periodId, "Added period '${period.name}'")
     }
@@ -322,11 +332,14 @@ class SmartCallRepositoryImpl(
         GlobalScope.launch {
             contacts.forEach { supabaseService.syncContact(it) }
         }
-        addAuditLog("IMPORT_CONTACTS", "Contact", "bulk", "Imported ${contacts.size} contacts into database")
+        addAuditLog("IMPORT_CONTACTS", "Contact", "bulk", "Imported ${contacts.size} contacts")
     }
 
     override suspend fun deleteContact(contactId: String) {
         db.contactDao().deleteContact(contactId)
+        GlobalScope.launch {
+            supabaseService.deleteContact(contactId)
+        }
         addAuditLog("DELETE_CONTACT", "Contact", contactId, "Deleted contact $contactId")
     }
 
@@ -368,7 +381,7 @@ class SmartCallRepositoryImpl(
         GlobalScope.launch {
             supabaseService.syncLeaveRecord(leave)
         }
-        addAuditLog("ADD_LEAVE", "LeaveRecord", leave.leaveId, "Created leave for contact ${leave.contactId} (${leave.startDate} to ${leave.endDate})")
+        addAuditLog("ADD_LEAVE", "LeaveRecord", leave.leaveId, "Created leave for contact ${leave.contactId}")
     }
 
     override suspend fun updateLeaveStatus(leaveId: String, status: LeaveStatus, approvedBy: String?) {
@@ -454,7 +467,7 @@ class SmartCallRepositoryImpl(
             )
         }
         db.callingQueueDao().insertQueueItems(queueItems)
-        addAuditLog("CREATE_SESSION", "CallingSession", sessionId, "Created calling session with ${selectedContacts.size} selected, ${eligibleContacts.size} eligible (${selectedContacts.size - eligibleContacts.size} on approved leave)")
+        addAuditLog("CREATE_SESSION", "CallingSession", sessionId, "Created calling session with ${selectedContacts.size} selected")
 
         return session
     }
@@ -552,7 +565,7 @@ class SmartCallRepositoryImpl(
                 )
             )
         }
-        addAuditLog("RECORD_CALL_LOG", "CallLog", log.logId, "Recorded call outcome ${log.outcomeStatus} for contact ${log.contactId}")
+        addAuditLog("RECORD_CALL_LOG", "CallLog", log.logId, "Recorded call outcome ${log.outcomeStatus}")
     }
 
     override fun getCallLogsForContact(contactId: String): Flow<List<CallLog>> {

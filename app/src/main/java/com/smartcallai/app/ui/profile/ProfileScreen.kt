@@ -1,6 +1,5 @@
 package com.smartcallai.app.ui.profile
 
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -14,15 +13,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import com.smartcallai.app.data.remote.SupabaseConfig
+import com.smartcallai.app.data.local.UserSessionManager
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.ui.MainViewModel
+import com.smartcallai.app.ui.auth.AuthViewModel
 import com.smartcallai.app.ui.components.*
 import com.smartcallai.app.ui.theme.*
 
@@ -30,13 +29,13 @@ import com.smartcallai.app.ui.theme.*
 @Composable
 fun ProfileScreen(
     navController: NavController,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    authViewModel: AuthViewModel
 ) {
     val context = LocalContext.current
     val org by viewModel.currentOrg.collectAsState()
     val user by viewModel.currentUser.collectAsState()
     val config by viewModel.industryConfig.collectAsState()
-    val supabaseConnected by viewModel.supabaseConnected.collectAsState()
 
     var showIndustryDialog by remember { mutableStateOf(false) }
     var showRoleDialog by remember { mutableStateOf(false) }
@@ -79,25 +78,25 @@ fun ProfileScreen(
                             }
                             Spacer(modifier = Modifier.width(16.dp))
                             Column {
-                                Text(text = user?.name ?: "Unregistered User", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
+                                Text(text = user?.name ?: "User Account", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                                 Text(text = user?.email ?: "No email configured", fontSize = 12.sp, color = TextSecondary)
-                                StatusBadge(text = user?.role?.displayName ?: "Guest")
+                                StatusBadge(text = user?.role?.displayName ?: "Admin")
                             }
                         }
 
-                        if (org != null) {
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = BorderLight)
+                        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = BorderLight)
 
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                OutlinedButton(
-                                    onClick = { showRoleDialog = true },
-                                    shape = RoundedCornerShape(10.dp)
-                                ) {
-                                    Icon(Icons.Default.ManageAccounts, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(text = "Switch Role", fontSize = 12.sp)
-                                }
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            OutlinedButton(
+                                onClick = { showRoleDialog = true },
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Icon(Icons.Default.ManageAccounts, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(text = "Switch Role", fontSize = 12.sp)
+                            }
 
+                            if (org != null) {
                                 OutlinedButton(
                                     onClick = { showIndustryDialog = true },
                                     shape = RoundedCornerShape(10.dp)
@@ -108,54 +107,23 @@ fun ProfileScreen(
                                 }
                             }
                         }
-                    }
-                }
-            }
 
-            // Supabase Database Connection Card
-            item {
-                Card(
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(1.dp, BorderLight, RoundedCornerShape(18.dp))
-                ) {
-                    Column(modifier = Modifier.padding(20.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.CloudSync, contentDescription = null, tint = RoyalBluePrimary)
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(text = "Supabase Database Sync", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
-                            }
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                            if (supabaseConnected == true) {
-                                StatusBadge(text = "Connected")
-                            } else if (supabaseConnected == false) {
-                                StatusBadge(text = "Offline Mode")
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Text(text = "Endpoint: ${SupabaseConfig.SUPABASE_URL}", fontSize = 12.sp, color = TextSecondary)
-                        Text(text = "Sync Mode: Offline-First Room DB with Supabase Cloud Sync", fontSize = 11.sp, color = TextMuted)
-
-                        Spacer(modifier = Modifier.height(14.dp))
+                        // Sign Out Button
                         Button(
                             onClick = {
-                                viewModel.testSupabaseConnection()
-                                Toast.makeText(context, "Testing Supabase API Connection...", Toast.LENGTH_SHORT).show()
+                                authViewModel.signOut()
                             },
-                            colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary),
-                            shape = RoundedCornerShape(10.dp)
+                            colors = ButtonDefaults.buttonColors(containerColor = DangerRedContainer, contentColor = DangerRed),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
                         ) {
-                            Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Test Connection & Sync", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Icon(Icons.Default.Logout, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(text = "Sign Out", fontWeight = FontWeight.Bold, fontSize = 15.sp)
                         }
                     }
                 }

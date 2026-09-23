@@ -91,7 +91,7 @@ fun ReportsScreen(
 
             // Breakdown Grid
             item {
-                Text(text = "Database Metrics Breakdown", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
+                Text(text = "Metrics Breakdown", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextPrimary)
             }
 
             item {

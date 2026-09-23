@@ -13,7 +13,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 object SupabaseConfig {
     const val SUPABASE_URL = "https://eyoszuowvipdalrjxjvj.supabase.co"
     const val SUPABASE_KEY = "sb_publishable_vWrDcsBDYrbPukmoi5dYIQ_h0tNUw8a"
-    private const val TAG = "SupabaseService"
 }
 
 class SupabaseService {
@@ -75,6 +74,57 @@ class SupabaseService {
         }
     }
 
+    suspend fun syncProfile(user: User): Boolean = withContext(Dispatchers.IO) {
+        val payload = mapOf(
+            "full_name" to user.name,
+            "email" to user.email,
+            "role" to user.role.name,
+            "status" to "ACTIVE"
+        )
+        val json = gson.toJson(payload)
+        val body = json.toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("${SupabaseConfig.SUPABASE_URL}/rest/v1/profiles")
+            .post(body)
+            .build()
+
+        try {
+            okHttpClient.newCall(request).execute().use { response ->
+                Log.d("SupabaseService", "syncProfile status: ${response.code}, body: ${response.body?.string()}")
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseService", "syncProfile error: ${e.message}", e)
+            false
+        }
+    }
+
+    suspend fun syncPeriod(period: Period): Boolean = withContext(Dispatchers.IO) {
+        val payload = mapOf(
+            "period_id" to period.periodId,
+            "name" to period.name,
+            "start_date" to period.startDate,
+            "end_date" to period.endDate,
+            "is_current" to period.isCurrent
+        )
+        val json = gson.toJson(payload)
+        val body = json.toRequestBody(jsonMediaType)
+        val request = Request.Builder()
+            .url("${SupabaseConfig.SUPABASE_URL}/rest/v1/periods")
+            .post(body)
+            .build()
+
+        try {
+            okHttpClient.newCall(request).execute().use { response ->
+                Log.d("SupabaseService", "syncPeriod status: ${response.code}, body: ${response.body?.string()}")
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseService", "syncPeriod error: ${e.message}", e)
+            false
+        }
+    }
+
     suspend fun syncContact(contact: Contact): Boolean = withContext(Dispatchers.IO) {
         val payload = mapOf(
             "contact_id" to contact.contactId,
@@ -103,6 +153,23 @@ class SupabaseService {
             }
         } catch (e: Exception) {
             Log.e("SupabaseService", "syncContact error: ${e.message}", e)
+            false
+        }
+    }
+
+    suspend fun deleteContact(contactId: String): Boolean = withContext(Dispatchers.IO) {
+        val request = Request.Builder()
+            .url("${SupabaseConfig.SUPABASE_URL}/rest/v1/contacts?contact_id=eq.$contactId")
+            .delete()
+            .build()
+
+        try {
+            okHttpClient.newCall(request).execute().use { response ->
+                Log.d("SupabaseService", "deleteContact status: ${response.code}")
+                response.isSuccessful
+            }
+        } catch (e: Exception) {
+            Log.e("SupabaseService", "deleteContact error: ${e.message}", e)
             false
         }
     }
@@ -164,51 +231,6 @@ class SupabaseService {
             }
         } catch (e: Exception) {
             Log.e("SupabaseService", "syncCallLog error: ${e.message}", e)
-            false
-        }
-    }
-
-    suspend fun fetchRemoteContacts(): List<Map<String, Any>> = withContext(Dispatchers.IO) {
-        val request = Request.Builder()
-            .url("${SupabaseConfig.SUPABASE_URL}/rest/v1/contacts?select=*")
-            .get()
-            .build()
-
-        try {
-            okHttpClient.newCall(request).execute().use { response ->
-                val bodyStr = response.body?.string() ?: ""
-                if (response.isSuccessful && bodyStr.isNotBlank()) {
-                    val type = object : TypeToken<List<Map<String, Any>>>() {}.type
-                    gson.fromJson(bodyStr, type) ?: emptyList()
-                } else emptyList()
-            }
-        } catch (e: Exception) {
-            Log.e("SupabaseService", "fetchRemoteContacts error: ${e.message}", e)
-            emptyList()
-        }
-    }
-
-    suspend fun logAuditAction(userId: String, action: String, details: String): Boolean = withContext(Dispatchers.IO) {
-        val payload = mapOf(
-            "audit_id" to "audit_${System.currentTimeMillis()}_${(100..999).random()}",
-            "user_id" to userId,
-            "action" to action,
-            "entity_type" to "USER_ACTION",
-            "entity_id" to userId,
-            "details" to details
-        )
-        val json = gson.toJson(payload)
-        val body = json.toRequestBody(jsonMediaType)
-        val request = Request.Builder()
-            .url("${SupabaseConfig.SUPABASE_URL}/rest/v1/audit_logs")
-            .post(body)
-            .build()
-
-        try {
-            okHttpClient.newCall(request).execute().use { response ->
-                response.isSuccessful
-            }
-        } catch (e: Exception) {
             false
         }
     }

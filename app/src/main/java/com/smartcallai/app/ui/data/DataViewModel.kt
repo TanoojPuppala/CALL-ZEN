@@ -151,6 +151,15 @@ class DataViewModel(
         }
     }
 
+    fun deleteSelectedContacts() {
+        viewModelScope.launch {
+            val selected = selectedContacts.value
+            selected.forEach { contact ->
+                repository.deleteContact(contact.contactId)
+            }
+        }
+    }
+
     fun clearImport() {
         _importPreviewItems.value = emptyList()
     }
