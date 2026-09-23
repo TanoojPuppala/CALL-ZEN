@@ -5,6 +5,7 @@ import com.smartcallai.app.data.remote.SupabaseService
 import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.utils.SecurityUtils
 import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ interface SmartCallRepository {
     ): Organization
 
     fun getCurrentUser(): Flow<User?>
+    suspend fun findUserByEmail(email: String): User?
     suspend fun setCurrentUser(user: User)
 
     fun getIndustryConfigs(): Flow<List<IndustryConfig>>
@@ -77,13 +79,14 @@ interface SmartCallRepository {
     suspend fun testSupabaseConnection(): Boolean
 }
 
-@OptIn(DelicateCoroutinesApi::class)
+@OptIn(DelicateCoroutinesApi::class, ExperimentalCoroutinesApi::class)
 class SmartCallRepositoryImpl(
     private val db: AppDatabase,
     private val supabaseService: SupabaseService = SupabaseService()
 ) : SmartCallRepository {
 
     private val activePeriodIdState = MutableStateFlow<String?>(null)
+    private val activeUserIdState = MutableStateFlow<String?>(null)
 
     init {
         // Seed default Industry Configs in Room if empty
@@ -124,10 +127,16 @@ class SmartCallRepositoryImpl(
     }
 
     override fun getCurrentOrganization(): Flow<Organization?> {
-        return db.organizationDao().getAllOrganizations().map { list ->
-            list.firstOrNull()?.let {
-                Organization(it.organizationId, it.name, it.industryType, it.code)
-            }
+        return getCurrentUser().flatMapLatest { user ->
+            if (user != null) {
+                db.organizationDao().getAllOrganizations().map { list ->
+                    list.find { it.organizationId == user.organizationId } ?: list.firstOrNull()
+                }.map { entity ->
+                    entity?.let {
+                        Organization(it.organizationId, it.name, it.industryType, it.code)
+                    }
+                }
+            } else flowOf(null)
         }
     }
 
@@ -148,16 +157,16 @@ class SmartCallRepositoryImpl(
         email: String,
         rawPassword: String
     ): Organization {
-        val orgId = "org_${System.currentTimeMillis()}"
+        val orgId = "org_${email.lowercase().replace("@", "_").replace(".", "_")}"
         val orgEntity = OrganizationEntity(orgId, orgName, industryType, orgCode)
         db.organizationDao().insertOrganization(orgEntity)
 
-        val userId = "user_${System.currentTimeMillis()}"
+        val userId = "user_${email.lowercase().replace("@", "_").replace(".", "_")}"
         val passHash = SecurityUtils.hashPassword(rawPassword)
         val userEntity = UserEntity(userId, adminName, email, passHash, UserRole.ORG_ADMIN, orgId)
         db.userDao().insertUser(userEntity)
 
-        val defaultPeriodId = "period_${System.currentTimeMillis()}"
+        val defaultPeriodId = "period_${orgId}"
         val periodEntity = PeriodEntity(
             periodId = defaultPeriodId,
             organizationId = orgId,
@@ -168,12 +177,12 @@ class SmartCallRepositoryImpl(
         )
         db.periodDao().insertPeriod(periodEntity)
         activePeriodIdState.value = defaultPeriodId
+        activeUserIdState.value = userId
 
         val org = Organization(orgId, orgName, industryType, orgCode)
         val user = User(userId, adminName, email, UserRole.ORG_ADMIN, orgId)
         val period = Period(defaultPeriodId, orgId, periodEntity.name, periodEntity.startDate, periodEntity.endDate, true)
 
-        // Sync Organization, User Profile, and Period to Supabase
         GlobalScope.launch {
             supabaseService.syncOrganization(org)
             supabaseService.syncProfile(user)
@@ -186,17 +195,31 @@ class SmartCallRepositoryImpl(
     }
 
     override fun getCurrentUser(): Flow<User?> {
-        return db.userDao().getAllUsers().map { list ->
-            list.firstOrNull()?.let {
-                User(it.userId, it.name, it.email, it.role, it.organizationId)
+        return activeUserIdState.flatMapLatest { activeId ->
+            db.userDao().getAllUsers().map { list ->
+                if (activeId != null) {
+                    list.find { it.userId == activeId }
+                } else {
+                    list.lastOrNull() ?: list.firstOrNull()
+                }
+            }.map { entity ->
+                entity?.let {
+                    User(it.userId, it.name, it.email, it.role, it.organizationId)
+                }
             }
         }
+    }
+
+    override suspend fun findUserByEmail(email: String): User? {
+        val entity = db.userDao().getUserByEmail(email) ?: return null
+        return User(entity.userId, entity.name, entity.email, entity.role, entity.organizationId)
     }
 
     override suspend fun setCurrentUser(user: User) {
         db.userDao().insertUser(
             UserEntity(user.userId, user.name, user.email, "", user.role, user.organizationId)
         )
+        activeUserIdState.value = user.userId
         GlobalScope.launch {
             supabaseService.syncProfile(user)
         }

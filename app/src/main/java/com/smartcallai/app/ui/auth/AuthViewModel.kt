@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.Locale
 
 sealed class AuthState {
     object Idle : AuthState()
@@ -28,7 +29,12 @@ class AuthViewModel(
     private val _authState = MutableStateFlow<AuthState>(
         if (sessionManager.isLoggedIn()) {
             val user = sessionManager.getUserSession()
-            if (user != null) AuthState.Success(user) else AuthState.Idle
+            if (user != null) {
+                viewModelScope.launch {
+                    repository.setCurrentUser(user)
+                }
+                AuthState.Success(user)
+            } else AuthState.Idle
         } else AuthState.Idle
     )
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -42,14 +48,24 @@ class AuthViewModel(
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
-                val org = repository.getCurrentOrganization()
-                val user = User(
-                    userId = "user_${System.currentTimeMillis()}",
-                    name = email.substringBefore("@").replace(".", " ").capitalize(),
-                    email = email,
-                    role = UserRole.ORG_ADMIN,
-                    organizationId = org.toString()
-                )
+                val cleanEmail = email.trim().lowercase(Locale.ROOT)
+                val existingUser = repository.findUserByEmail(cleanEmail)
+
+                val user = if (existingUser != null) {
+                    existingUser
+                } else {
+                    val org = repository.getCurrentOrganization()
+                    User(
+                        userId = "user_${cleanEmail.replace("@", "_").replace(".", "_")}",
+                        name = cleanEmail.substringBefore("@").replace(".", " ")
+                            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString() },
+                        email = cleanEmail,
+                        role = UserRole.ORG_ADMIN,
+                        organizationId = org.toString()
+                    )
+                }
+
+                sessionManager.clearSession()
                 sessionManager.saveUserSession(user)
                 repository.setCurrentUser(user)
                 repository.addAuditLog("USER_SIGN_IN", "User", user.userId, "User signed in: ${user.email}")
@@ -75,22 +91,34 @@ class AuthViewModel(
         viewModelScope.launch {
             _authState.value = AuthState.Loading
             try {
+                val cleanEmail = email.trim().lowercase(Locale.ROOT)
+                val existingUser = repository.findUserByEmail(cleanEmail)
+
+                if (existingUser != null) {
+                    sessionManager.clearSession()
+                    sessionManager.saveUserSession(existingUser)
+                    repository.setCurrentUser(existingUser)
+                    _authState.value = AuthState.Success(existingUser)
+                    return@launch
+                }
+
                 val org = repository.registerOrganizationAndAdmin(
                     orgName = orgName,
                     industryType = industryType,
                     orgCode = "ORG-${(1000..9999).random()}",
                     adminName = adminName,
-                    email = email,
+                    email = cleanEmail,
                     rawPassword = rawPassword
                 )
 
                 val user = User(
-                    userId = "user_${System.currentTimeMillis()}",
+                    userId = "user_${cleanEmail.replace("@", "_").replace(".", "_")}",
                     name = adminName,
-                    email = email,
+                    email = cleanEmail,
                     role = UserRole.ORG_ADMIN,
                     organizationId = org.organizationId
                 )
+                sessionManager.clearSession()
                 sessionManager.saveUserSession(user)
                 repository.setCurrentUser(user)
                 repository.addAuditLog("USER_SIGN_UP", "User", user.userId, "Created account & organization: ${org.name}")
