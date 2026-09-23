@@ -29,6 +29,7 @@ import com.smartcallai.app.domain.model.*
 import com.smartcallai.app.ui.calling.CallingViewModel
 import com.smartcallai.app.ui.components.*
 import com.smartcallai.app.ui.theme.*
+import com.smartcallai.app.utils.ExcelImportParser
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,7 +95,7 @@ fun DataManagementScreen(
                         ) {
                             Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(text = "Import CSV", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Text(text = "Import CSV / Excel", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 },
@@ -216,7 +217,7 @@ fun DataManagementScreen(
                         Text(text = "No Contacts Available", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextPrimary)
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "Add contacts manually or import a CSV file to start calling.",
+                            text = "Add contacts manually or import an Excel / CSV file to start calling.",
                             fontSize = 13.sp,
                             color = TextSecondary
                         )
@@ -237,7 +238,7 @@ fun DataManagementScreen(
                             ) {
                                 Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text(text = "Import CSV")
+                                Text(text = "Import CSV / Excel")
                             }
                         }
                     }
@@ -619,7 +620,7 @@ fun DataManagementScreen(
             )
         }
 
-        // CSV Import Dialog with Native File Picker Launcher
+        // CSV & Excel Import Dialog with Native File Picker Launcher
         if (showImportDialog) {
             var rawCsvText by remember { mutableStateOf("") }
 
@@ -628,20 +629,25 @@ fun DataManagementScreen(
             ) { uri: Uri? ->
                 if (uri != null) {
                     try {
-                        val inputStream = context.contentResolver.openInputStream(uri)
-                        val text = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
-                        rawCsvText = text
-                        dataViewModel.parseRawCsvInput(rawCsvText)
-                        Toast.makeText(context, "CSV File Loaded!", Toast.LENGTH_SHORT).show()
+                        val parsedItems = ExcelImportParser.parseXlsxOrCsv(context, uri)
+                        if (parsedItems.isNotEmpty()) {
+                            dataViewModel.setImportPreviewItems(parsedItems)
+                            Toast.makeText(context, "Loaded ${parsedItems.size} rows from file!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            val inputStream = context.contentResolver.openInputStream(uri)
+                            val text = inputStream?.bufferedReader()?.use { it.readText() } ?: ""
+                            dataViewModel.parseRawCsvInput(text)
+                            Toast.makeText(context, "Loaded file text!", Toast.LENGTH_SHORT).show()
+                        }
                     } catch (e: Exception) {
-                        Toast.makeText(context, "Failed to read CSV: ${e.message}", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Failed to read file: ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 }
             }
 
             AlertDialog(
                 onDismissRequest = { showImportDialog = false },
-                title = { Text(text = "Import Contacts (CSV File / Text)", fontWeight = FontWeight.Bold) },
+                title = { Text(text = "Import Contacts (Excel / CSV File)", fontWeight = FontWeight.Bold) },
                 text = {
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -655,7 +661,7 @@ fun DataManagementScreen(
                         ) {
                             Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "Choose CSV File from Storage", fontWeight = FontWeight.Bold)
+                            Text(text = "Choose Excel (.xlsx) / CSV File", fontWeight = FontWeight.Bold)
                         }
 
                         Text(text = "Or paste CSV / comma-separated text manually:", fontSize = 12.sp, color = TextSecondary)

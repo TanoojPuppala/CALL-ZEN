@@ -51,7 +51,7 @@ class DataViewModel(
         list.filter { it.isSelected }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Real File / CSV Import State
+    // Real File / CSV / Excel Import State
     private val _importPreviewItems = MutableStateFlow<List<ImportPreviewItem>>(emptyList())
     val importPreviewItems: StateFlow<List<ImportPreviewItem>> = _importPreviewItems.asStateFlow()
 
@@ -106,6 +106,10 @@ class DataViewModel(
             )
             repository.addContact(contact)
         }
+    }
+
+    fun setImportPreviewItems(items: List<ImportPreviewItem>) {
+        _importPreviewItems.value = items
     }
 
     fun parseRawCsvInput(rawText: String, defaultGroup: String = "General") {

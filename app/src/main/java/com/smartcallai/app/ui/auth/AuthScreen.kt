@@ -1,16 +1,25 @@
 package com.smartcallai.app.ui.auth
 
+import android.util.Patterns
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +33,8 @@ fun AuthScreen(
     onAuthSuccess: () -> Unit
 ) {
     val authState by viewModel.authState.collectAsState()
+    val focusManager = LocalFocusManager.current
+    val scrollState = rememberScrollState()
 
     var isSignUpTab by remember { mutableStateOf(false) }
 
@@ -33,6 +44,7 @@ fun AuthScreen(
     var orgName by remember { mutableStateOf("") }
     var adminName by remember { mutableStateOf("") }
     var selectedIndustry by remember { mutableStateOf(IndustryType.EDUCATION) }
+    var localError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(authState) {
         if (authState is AuthState.Success) {
@@ -51,10 +63,14 @@ fun AuthScreen(
             shape = RoundedCornerShape(20.dp),
             colors = CardDefaults.cardColors(containerColor = CardSurface),
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(scrollState),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -63,7 +79,7 @@ fun AuthScreen(
                 Text(text = "CallZen", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = RoyalBluePrimary)
                 Text(text = "Connect Smarter. Communicate Better.", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Auth Mode Switcher (Sign In vs Sign Up)
                 Row(
@@ -74,7 +90,10 @@ fun AuthScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Button(
-                        onClick = { isSignUpTab = false },
+                        onClick = {
+                            isSignUpTab = false
+                            localError = null
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (!isSignUpTab) RoyalBluePrimary else Color.Transparent,
                             contentColor = if (!isSignUpTab) Color.White else TextPrimary
@@ -86,7 +105,10 @@ fun AuthScreen(
                     }
 
                     Button(
-                        onClick = { isSignUpTab = true },
+                        onClick = {
+                            isSignUpTab = true
+                            localError = null
+                        },
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (isSignUpTab) RoyalBluePrimary else Color.Transparent,
                             contentColor = if (isSignUpTab) Color.White else TextPrimary
@@ -99,12 +121,17 @@ fun AuthScreen(
                 }
 
                 if (isSignUpTab) {
-                    // Sign Up Form
+                    // Sign Up Form Fields
                     OutlinedTextField(
                         value = orgName,
-                        onValueChange = { orgName = it },
+                        onValueChange = {
+                            orgName = it
+                            localError = null
+                        },
                         placeholder = { Text("Organization Name") },
                         leadingIcon = { Icon(Icons.Default.Business, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -122,9 +149,14 @@ fun AuthScreen(
 
                     OutlinedTextField(
                         value = adminName,
-                        onValueChange = { adminName = it },
+                        onValueChange = {
+                            adminName = it
+                            localError = null
+                        },
                         placeholder = { Text("Full Name") },
                         leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                        keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -133,27 +165,44 @@ fun AuthScreen(
                 // Shared Form Fields
                 OutlinedTextField(
                     value = email,
-                    onValueChange = { email = it },
+                    onValueChange = {
+                        email = it
+                        localError = null
+                    },
                     placeholder = { Text("Email Address") },
                     leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { focusManager.moveFocus(FocusDirection.Down) }),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
                 OutlinedTextField(
                     value = password,
-                    onValueChange = { password = it },
+                    onValueChange = {
+                        password = it
+                        localError = null
+                    },
                     placeholder = { Text("Password") },
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                     visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = {
+                        focusManager.clearFocus()
+                        if (validateAndSubmit(email, isSignUpTab, { localError = it })) {
+                            if (isSignUpTab) viewModel.signUp(orgName, selectedIndustry, adminName, email, password)
+                            else viewModel.signIn(email, password)
+                        }
+                    }),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                // Error Message
-                if (authState is AuthState.Error) {
+                // Display Error Message
+                val displayError = localError ?: (if (authState is AuthState.Error) (authState as AuthState.Error).message else null)
+                if (displayError != null) {
                     Text(
-                        text = (authState as AuthState.Error).message,
+                        text = displayError,
                         color = DangerRed,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold
@@ -163,10 +212,13 @@ fun AuthScreen(
                 // Submit Button
                 Button(
                     onClick = {
-                        if (isSignUpTab) {
-                            viewModel.signUp(orgName, selectedIndustry, adminName, email, password)
-                        } else {
-                            viewModel.signIn(email, password)
+                        focusManager.clearFocus()
+                        if (validateAndSubmit(email, isSignUpTab, { localError = it })) {
+                            if (isSignUpTab) {
+                                viewModel.signUp(orgName, selectedIndustry, adminName, email, password)
+                            } else {
+                                viewModel.signIn(email, password)
+                            }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary),
@@ -184,4 +236,16 @@ fun AuthScreen(
             }
         }
     }
+}
+
+private fun validateAndSubmit(email: String, isSignUp: Boolean, setError: (String) -> Unit): Boolean {
+    if (email.isBlank()) {
+        setError("Please enter your email address")
+        return false
+    }
+    if (!Patterns.EMAIL_ADDRESS.matcher(email.trim()).matches()) {
+        setError("Please enter a valid email address (e.g. name@domain.com)")
+        return false
+    }
+    return true
 }

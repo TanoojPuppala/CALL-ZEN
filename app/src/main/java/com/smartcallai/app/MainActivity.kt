@@ -10,6 +10,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.smartcallai.app.data.local.AppDatabase
 import com.smartcallai.app.data.repository.SmartCallRepositoryImpl
@@ -83,6 +84,8 @@ fun SmartCallAppContent(
     authViewModel: AuthViewModel
 ) {
     val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
     Scaffold(
         bottomBar = {
@@ -119,7 +122,10 @@ fun SmartCallAppContent(
                 }
             }
 
-            VoiceAssistantOverlay(viewModel = voiceViewModel)
+            // Floating Voice Assistant Overlay (Hidden on Data Management screen)
+            if (currentRoute != Screen.DataManagement.route) {
+                VoiceAssistantOverlay(viewModel = voiceViewModel)
+            }
         }
     }
 }
