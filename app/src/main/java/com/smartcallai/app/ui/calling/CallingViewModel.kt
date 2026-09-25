@@ -71,12 +71,19 @@ class CallingViewModel(
         _isCallActive.value = true
         _callStartTime.value = System.currentTimeMillis()
 
+        // Move contact to Absentees list and unselect from active queue
+        viewModelScope.launch {
+            repository.markContactsAsAbsent(listOf(contact.contactId))
+            repository.updateContactSelection(contact.contactId, false)
+        }
+
         val intent = Intent(Intent.ACTION_DIAL).apply {
             data = Uri.parse("tel:${phoneNumber.replace(" ", "")}")
             flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         try {
             context.startActivity(intent)
+            onCallEnded(CallOutcome.ANSWERED, "Dialed contact ${contact.name}")
         } catch (e: Exception) {
             e.printStackTrace()
         }

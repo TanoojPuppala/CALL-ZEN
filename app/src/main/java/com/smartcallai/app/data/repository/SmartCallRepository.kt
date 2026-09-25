@@ -221,12 +221,14 @@ class SmartCallRepositoryImpl(
     }
 
     override suspend fun setCurrentUser(user: User) {
+        val cleanEmail = user.email.trim().lowercase(Locale.ROOT)
+        val userWithCleanEmail = user.copy(email = cleanEmail)
         db.userDao().insertUser(
-            UserEntity(user.userId, user.name, user.email, "", user.role, user.organizationId)
+            UserEntity(userWithCleanEmail.userId, userWithCleanEmail.name, userWithCleanEmail.email, "", userWithCleanEmail.role, userWithCleanEmail.organizationId)
         )
-        activeUserIdState.value = user.userId
+        activeUserIdState.value = userWithCleanEmail.userId
         GlobalScope.launch {
-            supabaseService.syncProfile(user)
+            supabaseService.syncProfile(userWithCleanEmail)
         }
     }
 

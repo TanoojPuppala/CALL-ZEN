@@ -55,6 +55,11 @@ fun DataManagementScreen(
     var showAddContactDialog by remember { mutableStateOf(false) }
     var showReadyToCallModal by remember { mutableStateOf(false) }
 
+    // Confirmation dialog states
+    var contactToDelete by remember { mutableStateOf<Contact?>(null) }
+    var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
+    var showDeleteAllConfirm by remember { mutableStateOf(false) }
+
     val allSelected = contacts.isNotEmpty() && contacts.all { it.isSelected }
 
     val approvedLeaveContacts = selectedContacts.filter { contact ->
@@ -117,47 +122,63 @@ fun DataManagementScreen(
                 ) {
                     Row(
                         modifier = Modifier
-                            .padding(16.dp)
+                            .padding(12.dp)
                             .fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "${selectedContacts.size} Selected",
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp,
+                                fontSize = 15.sp,
                                 color = TextPrimary
                             )
                             Text(
-                                text = "${eligibleContacts.size} Call Queue • ${approvedLeaveContacts.size} On Approved Leave",
-                                fontSize = 12.sp,
+                                text = "${eligibleContacts.size} Call Queue • ${approvedLeaveContacts.size} Leave",
+                                fontSize = 11.sp,
                                 color = TextSecondary
                             )
                         }
 
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             // Delete Selected Button
                             Button(
-                                onClick = { dataViewModel.deleteSelectedContacts() },
+                                onClick = { showDeleteSelectedConfirm = true },
                                 colors = ButtonDefaults.buttonColors(containerColor = DangerRedContainer, contentColor = DangerRed),
                                 shape = RoundedCornerShape(12.dp),
-                                modifier = Modifier.height(48.dp)
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                                modifier = Modifier.height(44.dp)
                             ) {
                                 Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(text = "Delete", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                Text(text = "Delete", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                             }
 
                             // CALL NOW Button
-                            PrimaryButton(
-                                text = "CALL NOW",
+                            Button(
                                 onClick = {
                                     dataViewModel.markSelectedAsAbsent()
                                     showReadyToCallModal = true
                                 },
-                                icon = Icons.Default.Call
-                            )
+                                colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary, contentColor = Color.White),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                                modifier = Modifier.height(44.dp)
+                            ) {
+                                Icon(Icons.Default.Call, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "CALL NOW",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
@@ -277,8 +298,7 @@ fun DataManagementScreen(
                             Text(text = "Select All (${contacts.size})", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                         }
 
-                        // Wipe All Contacts Button
-                        TextButton(onClick = { dataViewModel.deleteAllContacts() }) {
+                        TextButton(onClick = { showDeleteAllConfirm = true }) {
                             Text(text = "Clear All", color = DangerRed, fontSize = 12.sp)
                         }
                     }
@@ -352,7 +372,7 @@ fun DataManagementScreen(
                                 }
 
                                 Box(modifier = Modifier.width(80.dp)) {
-                                    IconButton(onClick = { dataViewModel.deleteContact(contact.contactId) }) {
+                                    IconButton(onClick = { contactToDelete = contact }) {
                                         Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed, modifier = Modifier.size(18.dp))
                                     }
                                 }
@@ -552,6 +572,75 @@ fun DataManagementScreen(
                     ) {
                         Text(text = "Confirm & Next Contact")
                     }
+                }
+            )
+        }
+
+        // Delete Single Contact Confirmation Popup
+        if (contactToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { contactToDelete = null },
+                title = { Text(text = "Delete Contact", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to delete ${contactToDelete?.name} (${contactToDelete?.rollOrIdNumber})?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            contactToDelete?.let { dataViewModel.deleteContact(it.contactId) }
+                            contactToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { contactToDelete = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Delete Selected Contacts Confirmation Popup
+        if (showDeleteSelectedConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteSelectedConfirm = false },
+                title = { Text(text = "Delete Selected Contacts", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to delete all ${selectedContacts.size} selected contacts?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            dataViewModel.deleteSelectedContacts()
+                            showDeleteSelectedConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text("Delete All Selected")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteSelectedConfirm = false }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Clear All Contacts Confirmation Popup
+        if (showDeleteAllConfirm) {
+            AlertDialog(
+                onDismissRequest = { showDeleteAllConfirm = false },
+                title = { Text(text = "Clear All Contacts", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to clear ALL contacts from your list?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            dataViewModel.deleteAllContacts()
+                            showDeleteAllConfirm = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text("Clear All")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteAllConfirm = false }) { Text("Cancel") }
                 }
             )
         }
