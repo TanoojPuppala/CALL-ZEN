@@ -35,6 +35,7 @@ fun LeaveManagementScreen(
 
     var showAddLeaveDialog by remember { mutableStateOf(false) }
     var selectedFilter by remember { mutableStateOf("ALL") }
+    var leaveToDelete by remember { mutableStateOf<LeaveRecord?>(null) }
 
     val filteredLeaves = leaveRecords.filter { leave ->
         when (selectedFilter) {
@@ -152,7 +153,7 @@ fun LeaveManagementScreen(
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         StatusBadge(text = leave.status.displayName)
                                         Spacer(modifier = Modifier.width(4.dp))
-                                        IconButton(onClick = { viewModel.deleteLeaveRecord(leave.leaveId) }) {
+                                        IconButton(onClick = { leaveToDelete = leave }) {
                                             Icon(Icons.Default.Delete, contentDescription = "Delete Leave", tint = DangerRed, modifier = Modifier.size(18.dp))
                                         }
                                     }
@@ -213,18 +214,51 @@ fun LeaveManagementScreen(
             }
         }
 
-        // Add Leave Dialog
+        // Delete Leave Record Confirmation Popup
+        if (leaveToDelete != null) {
+            AlertDialog(
+                onDismissRequest = { leaveToDelete = null },
+                title = { Text(text = "Delete Leave Record", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to delete this leave record (${leaveToDelete?.startDate} to ${leaveToDelete?.endDate})?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            leaveToDelete?.let { viewModel.deleteLeaveRecord(it.leaveId) }
+                            leaveToDelete = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { leaveToDelete = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Add Leave Dialog with Manual Date & Duration Selection
         if (showAddLeaveDialog) {
             var selectedContactId by remember { mutableStateOf(contacts.firstOrNull()?.contactId ?: "") }
             var leaveType by remember { mutableStateOf("Sick Leave") }
             var reason by remember { mutableStateOf("") }
-            var durationDays by remember { mutableStateOf(3) }
 
             val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val cal = Calendar.getInstance()
-            val startDate = sdf.format(cal.time)
-            cal.add(Calendar.DAY_OF_YEAR, durationDays - 1)
-            val endDate = sdf.format(cal.time)
+            val todayStr = sdf.format(cal.time)
+
+            var customStartDate by remember { mutableStateOf(todayStr) }
+            cal.add(Calendar.DAY_OF_YEAR, 2)
+            var customEndDate by remember { mutableStateOf(sdf.format(cal.time)) }
+
+            val calculatedDays = try {
+                val d1 = sdf.parse(customStartDate)
+                val d2 = sdf.parse(customEndDate)
+                if (d1 != null && d2 != null) {
+                    val diffMs = d2.time - d1.time
+                    ((diffMs / (1000 * 60 * 60 * 24)) + 1).toInt().coerceAtLeast(1)
+                } else 1
+            } catch (e: Exception) { 1 }
 
             AlertDialog(
                 onDismissRequest = { showAddLeaveDialog = false },
@@ -249,18 +283,27 @@ fun LeaveManagementScreen(
                                 }
                             }
 
-                            Text(text = "Duration Preset:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                listOf(1 to "1 Day", 3 to "3 Days", 7 to "1 Week").forEach { (days, label) ->
-                                    FilterChip(
-                                        selected = durationDays == days,
-                                        onClick = { durationDays = days },
-                                        label = { Text(text = label, fontSize = 12.sp) }
-                                    )
-                                }
+                            Text(text = "Manual Calendar Dates (YYYY-MM-DD):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = customStartDate,
+                                    onValueChange = { customStartDate = it },
+                                    label = { Text("Start Date", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                OutlinedTextField(
+                                    value = customEndDate,
+                                    onValueChange = { customEndDate = it },
+                                    label = { Text("End Date", fontSize = 11.sp) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
                             }
 
-                            Text(text = "Calculated Dates: $startDate to $endDate", fontSize = 12.sp, color = RoyalBluePrimary, fontWeight = FontWeight.Bold)
+                            Text(text = "Calculated Duration: $calculatedDays Days ($customStartDate to $customEndDate)", fontSize = 12.sp, color = RoyalBluePrimary, fontWeight = FontWeight.Bold)
 
                             Text(text = "Reason for Leave:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                             OutlinedTextField(
@@ -281,9 +324,9 @@ fun LeaveManagementScreen(
                                     viewModel.addLeaveRequest(
                                         contactId = targetContactId,
                                         leaveType = leaveType,
-                                        startDate = startDate,
-                                        endDate = endDate,
-                                        durationDays = durationDays,
+                                        startDate = customStartDate,
+                                        endDate = customEndDate,
+                                        durationDays = calculatedDays,
                                         reason = reason,
                                         notes = "Sanctioned via Leave Module",
                                         autoApprove = true

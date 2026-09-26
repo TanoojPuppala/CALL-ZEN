@@ -36,7 +36,7 @@ class DataViewModel(
                     c.primaryPhone.contains(query)
             val matchesFilter = when (filter) {
                 "SELECTED" -> c.isSelected
-                "ABSENT" -> c.currentStatus.contains("Absent", ignoreCase = true)
+                "ABSENT" -> c.currentStatus.equals("Absent", ignoreCase = true)
                 "LEAVE" -> c.currentStatus.contains("Leave", ignoreCase = true)
                 else -> true
             }
@@ -80,6 +80,16 @@ class DataViewModel(
         viewModelScope.launch {
             val selectedIds = selectedContacts.value.map { it.contactId }
             repository.markContactsAsAbsent(selectedIds)
+        }
+    }
+
+    fun removeContactFromAbsent(contactId: String) {
+        viewModelScope.launch {
+            repository.markContactsAsAbsent(listOf(contactId)) // Reset to Active
+            val contact = repository.getContactById(contactId).first()
+            if (contact != null) {
+                repository.addContact(contact.copy(currentStatus = "Active"))
+            }
         }
     }
 

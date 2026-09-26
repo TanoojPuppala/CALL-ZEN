@@ -54,9 +54,11 @@ fun DataManagementScreen(
     var showImportDialog by remember { mutableStateOf(false) }
     var showAddContactDialog by remember { mutableStateOf(false) }
     var showReadyToCallModal by remember { mutableStateOf(false) }
+    var showMonthlyReportModal by remember { mutableStateOf(false) }
 
     // Confirmation dialog states
     var contactToDelete by remember { mutableStateOf<Contact?>(null) }
+    var contactToRemoveFromAbsent by remember { mutableStateOf<Contact?>(null) }
     var showDeleteSelectedConfirm by remember { mutableStateOf(false) }
     var showDeleteAllConfirm by remember { mutableStateOf(false) }
 
@@ -210,17 +212,27 @@ fun DataManagementScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            // Filter Chips
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Filter Chips with 5th Chip: Monthly Leave Report
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
                 listOf(
                     "ALL" to "All (${contacts.size})",
                     "SELECTED" to "Selected (${selectedContacts.size})",
                     "ABSENT" to "Absent Today",
-                    "LEAVE" to "On Leave"
+                    "LEAVE" to "On Leave",
+                    "MONTHLY_REPORT" to "Monthly Leave Report 📊"
                 ).forEach { (key, label) ->
                     FilterChip(
-                        selected = statusFilter == key,
-                        onClick = { dataViewModel.setStatusFilter(key) },
+                        selected = if (key == "MONTHLY_REPORT") false else statusFilter == key,
+                        onClick = {
+                            if (key == "MONTHLY_REPORT") {
+                                showMonthlyReportModal = true
+                            } else {
+                                dataViewModel.setStatusFilter(key)
+                            }
+                        },
                         label = { Text(text = label, fontSize = 12.sp) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = RoyalBluePrimary,
@@ -372,8 +384,19 @@ fun DataManagementScreen(
                                 }
 
                                 Box(modifier = Modifier.width(80.dp)) {
-                                    IconButton(onClick = { contactToDelete = contact }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = DangerRed, modifier = Modifier.size(18.dp))
+                                    IconButton(onClick = {
+                                        if (statusFilter == "ABSENT") {
+                                            contactToRemoveFromAbsent = contact
+                                        } else {
+                                            contactToDelete = contact
+                                        }
+                                    }) {
+                                        Icon(
+                                            imageVector = if (statusFilter == "ABSENT") Icons.Default.RemoveCircleOutline else Icons.Default.Delete,
+                                            contentDescription = "Delete or Remove",
+                                            tint = DangerRed,
+                                            modifier = Modifier.size(18.dp)
+                                        )
                                     }
                                 }
                             }
@@ -382,6 +405,97 @@ fun DataManagementScreen(
                     }
                 }
             }
+        }
+
+        // Monthly Leave Report Dialog
+        if (showMonthlyReportModal) {
+            var selectedReportContactId by remember { mutableStateOf(contacts.firstOrNull()?.contactId ?: "") }
+            val selectedReportContact = contacts.find { it.contactId == selectedReportContactId } ?: contacts.firstOrNull()
+            val contactLeaves = leaveRecords.filter { it.contactId == selectedReportContact?.contactId }
+
+            AlertDialog(
+                onDismissRequest = { showMonthlyReportModal = false },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.DateRange, contentDescription = null, tint = RoyalBluePrimary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Monthly Leave Report", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    }
+                },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 420.dp)
+                    ) {
+                        if (contacts.isEmpty()) {
+                            Text(text = "No contacts available to generate monthly leave report.", fontSize = 13.sp, color = TextMuted)
+                        } else {
+                            Text(text = "Select Contact:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                            contacts.take(5).forEach { c ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    RadioButton(
+                                        selected = selectedReportContactId == c.contactId,
+                                        onClick = { selectedReportContactId = c.contactId }
+                                    )
+                                    Text(text = "${c.name} (ID #${c.rollOrIdNumber})", fontSize = 13.sp)
+                                }
+                            }
+
+                            if (selectedReportContact != null) {
+                                Card(
+                                    shape = RoundedCornerShape(12.dp),
+                                    colors = CardDefaults.cardColors(containerColor = SoftBlueContainer),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(text = "Contact: ${selectedReportContact.name}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = RoyalBlueDark)
+                                        Text(text = "Total Days Sanctioned: ${contactLeaves.sumOf { it.durationDays }} Days", fontSize = 12.sp, color = TextPrimary)
+                                        Text(text = "Monthly Attendance: ${selectedReportContact.monthlyAttendance}%", fontSize = 12.sp, color = TextSecondary)
+                                    }
+                                }
+
+                                Text(text = "Leave Log History (${contactLeaves.size} records):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+
+                                if (contactLeaves.isEmpty()) {
+                                    Text(text = "No leave records sanctioned for this contact this month.", fontSize = 11.sp, color = TextMuted)
+                                } else {
+                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                                        items(contactLeaves) { leave ->
+                                            Card(
+                                                shape = RoundedCornerShape(8.dp),
+                                                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .border(1.dp, BorderLight, RoundedCornerShape(8.dp))
+                                            ) {
+                                                Column(modifier = Modifier.padding(8.dp)) {
+                                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                                        Text(text = "${leave.leaveType} (${leave.durationDays} Days)", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = RoyalBluePrimary)
+                                                        StatusBadge(text = leave.status.displayName)
+                                                    }
+                                                    Text(text = "Dates: ${leave.startDate} to ${leave.endDate}", fontSize = 11.sp, color = TextSecondary)
+                                                    Text(text = "Reason: ${leave.reason}", fontSize = 11.sp, color = TextMuted)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showMonthlyReportModal = false }) {
+                        Text(text = "Close")
+                    }
+                }
+            )
         }
 
         // Ready-to-Call & Direct Dialing Modal
@@ -580,8 +694,8 @@ fun DataManagementScreen(
         if (contactToDelete != null) {
             AlertDialog(
                 onDismissRequest = { contactToDelete = null },
-                title = { Text(text = "Delete Contact", fontWeight = FontWeight.Bold) },
-                text = { Text(text = "Are you sure you want to delete ${contactToDelete?.name} (${contactToDelete?.rollOrIdNumber})?") },
+                title = { Text(text = "Permanently Delete Contact", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to permanently delete ${contactToDelete?.name} (${contactToDelete?.rollOrIdNumber}) from the system?") },
                 confirmButton = {
                     Button(
                         onClick = {
@@ -590,11 +704,34 @@ fun DataManagementScreen(
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = DangerRed)
                     ) {
-                        Text("Delete")
+                        Text("Permanently Delete")
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { contactToDelete = null }) { Text("Cancel") }
+                }
+            )
+        }
+
+        // Remove Contact From Absentees Confirmation Popup
+        if (contactToRemoveFromAbsent != null) {
+            AlertDialog(
+                onDismissRequest = { contactToRemoveFromAbsent = null },
+                title = { Text(text = "Remove from Absentees", fontWeight = FontWeight.Bold) },
+                text = { Text(text = "Are you sure you want to remove ${contactToRemoveFromAbsent?.name} from the Absentees list and restore their Active status?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            contactToRemoveFromAbsent?.let { dataViewModel.removeContactFromAbsent(it.contactId) }
+                            contactToRemoveFromAbsent = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = RoyalBluePrimary)
+                    ) {
+                        Text("Remove from Absent")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { contactToRemoveFromAbsent = null }) { Text("Cancel") }
                 }
             )
         }
@@ -604,7 +741,7 @@ fun DataManagementScreen(
             AlertDialog(
                 onDismissRequest = { showDeleteSelectedConfirm = false },
                 title = { Text(text = "Delete Selected Contacts", fontWeight = FontWeight.Bold) },
-                text = { Text(text = "Are you sure you want to delete all ${selectedContacts.size} selected contacts?") },
+                text = { Text(text = "Are you sure you want to permanently delete all ${selectedContacts.size} selected contacts?") },
                 confirmButton = {
                     Button(
                         onClick = {
